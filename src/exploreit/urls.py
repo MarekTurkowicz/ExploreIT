@@ -15,9 +15,12 @@ class Scope(StrEnum):
 
 
 def is_crawlable(url: str) -> bool:
-    """Return True if the URL is an absolute http(s) URL with a host."""
-    parts = urlsplit(url)
-    return parts.scheme.lower() in DEFAULT_PORTS and bool(parts.hostname)
+    """Return True if the URL is a valid absolute http(s) URL with a host."""
+    try:
+        normalize_url(url)
+    except ValueError:
+        return False
+    return True
 
 
 def normalize_url(url: str, base: str = "") -> str:

@@ -18,6 +18,8 @@ def test_scope_from_string() -> None:
         ("ftp://example.com/file.txt", False),
         ("/relative/path", False),
         ("https://", False),
+        ("http://example.com:abc/", False),
+        ("http://[::1", False),
     ],
 )
 def test_is_crawlable(url: str, expected: bool) -> None:
