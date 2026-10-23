@@ -12,9 +12,22 @@ from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
+from exploreit.plots import plot_comparison
 from exploreit.urls import Scope
 
 PARAMETERS = ["strategy", "scope", "link_mode"]
+SUMMARY_COLUMNS = [
+    *PARAMETERS,
+    "pages",
+    "links",
+    "external_links",
+    "depth",
+    "start_page_links",
+    "subpage_links_mean",
+    "dead_ends",
+]
+SUMMARY_FILE = "summary.csv"
+CHART_FILE = "comparison.png"
 
 
 def experiment_configs(
@@ -74,6 +87,15 @@ def comparison_table(results: Iterable[CrawlResult]) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows, columns=[*PARAMETERS, *GraphStats.model_fields])
+
+
+def save_comparison(results: Iterable[CrawlResult], directory: Path) -> pd.DataFrame:
+    """Build the comparison table and save it as CSV and as a chart in the directory."""
+    table = comparison_table(results)
+    directory.mkdir(parents=True, exist_ok=True)
+    table.to_csv(directory / SUMMARY_FILE, index=False)
+    plot_comparison(table, directory / CHART_FILE)
+    return table
 
 
 def load_results(directory: Path) -> list[CrawlResult]:

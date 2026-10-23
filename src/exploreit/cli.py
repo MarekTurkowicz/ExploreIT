@@ -11,23 +11,26 @@ from rich.markup import escape
 from rich.table import Table
 
 from exploreit import __version__
-from exploreit.compare import summarize, url_overlap
+from exploreit.compare import comparison_rows, crawl_label
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.experiments import (
+    CHART_FILE,
     PARAMETERS,
-    comparison_table,
+    SUMMARY_COLUMNS,
+    SUMMARY_FILE,
     experiment_configs,
     experiment_name,
     load_results,
     run_experiments,
+    save_comparison,
 )
 from exploreit.export import write_gexf, write_html
 from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
-from exploreit.plots import plot_comparison, plot_levels, plot_out_links
+from exploreit.plots import plot_levels, plot_out_links
 from exploreit.storage import ContentField, write_csv, write_sqlite
 from exploreit.tui import ExploreApp
 from exploreit.urls import Scope
@@ -267,40 +270,27 @@ def diff(
     second: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Second crawl.")],
 ) -> None:
     """Compare the page content stored by two crawls."""
-    results = [CrawlResult.load(first), CrawlResult.load(second)]
-    summaries = [summarize(result) for result in results]
-
+    rows = comparison_rows(CrawlResult.load(first), CrawlResult.load(second))
     table = Table(title="Content databases compared")
     table.add_column("")
     for path in (first, second):
         table.add_column(path.stem, overflow="fold")
-    table.add_row("Crawl", *(_crawl_label(result.config) for result in results))
-    table.add_section()
-    for (label, value_a), (_, value_b) in zip(*(s.rows() for s in summaries), strict=True):
-        table.add_row(label, escape(value_a), escape(value_b))
-    table.add_section()
-    overlap = url_overlap(*results)
-    table.add_row("Pages in both", str(overlap.common), str(overlap.common))
-    table.add_row("Pages only here", str(overlap.only_first), str(overlap.only_second))
+    for label, first_value, second_value in rows:
+        table.add_row(label, escape(first_value), escape(second_value))
     console.print(table)
 
 
 def _print_comparison(directory: Path) -> None:
-    table = comparison_table(load_results(directory))
-    table.to_csv(directory / "summary.csv", index=False)
-    plot_comparison(table, directory / "comparison.png")
-
+    table = save_comparison(load_results(directory), directory)
     view = Table(title="Crawl parameters compared")
-    columns = ["strategy", "scope", "link_mode", "pages", "links", "external_links", "depth"]
-    columns += ["start_page_links", "subpage_links_mean", "dead_ends"]
-    for column in columns:
+    for column in SUMMARY_COLUMNS:
         view.add_column(
             column.replace("_", " "), justify="left" if column in PARAMETERS else "right"
         )
-    for row in table[columns].itertuples(index=False):
+    for row in table[SUMMARY_COLUMNS].itertuples(index=False):
         view.add_row(*(f"{value:.1f}" if isinstance(value, float) else str(value) for value in row))
     console.print(view)
-    console.print(f"Saved {directory / 'summary.csv'} and {directory / 'comparison.png'}")
+    console.print(f"Saved {directory / SUMMARY_FILE} and {directory / CHART_FILE}")
 
 
 def _print_errors(error: ValidationError) -> None:
@@ -328,12 +318,8 @@ def _summary(result: CrawlResult, output: Path) -> Table:
 
 def _stats_table(stats: GraphStats, config: CrawlConfig) -> Table:
     table = Table(title=f"Link graph of {escape(config.start_url)}", show_header=False)
-    table.add_row("Crawl", _crawl_label(config))
+    table.add_row("Crawl", crawl_label(config))
     table.add_section()
     for label, value in stats.summary():
         table.add_row(label, escape(value))
     return table
-
-
-def _crawl_label(config: CrawlConfig) -> str:
-    return f"{config.strategy} · {config.scope} · {config.link_mode} · depth {config.max_depth}"

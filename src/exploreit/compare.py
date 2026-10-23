@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 
+from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 
 
@@ -76,3 +77,22 @@ def url_overlap(first: CrawlResult, second: CrawlResult) -> Overlap:
         only_first=len(first_urls - second_urls),
         only_second=len(second_urls - first_urls),
     )
+
+
+def comparison_rows(first: CrawlResult, second: CrawlResult) -> list[tuple[str, str, str]]:
+    """Return (label, first value, second value) rows describing two content databases."""
+    rows = [("Crawl", crawl_label(first.config), crawl_label(second.config))]
+    first_rows, second_rows = summarize(first).rows(), summarize(second).rows()
+    rows += [
+        (label, first_value, second_value)
+        for (label, first_value), (_, second_value) in zip(first_rows, second_rows, strict=True)
+    ]
+    overlap = url_overlap(first, second)
+    rows.append(("Pages in both", str(overlap.common), str(overlap.common)))
+    rows.append(("Pages only here", str(overlap.only_first), str(overlap.only_second)))
+    return rows
+
+
+def crawl_label(config: CrawlConfig) -> str:
+    """Describe crawl parameters in one line, e.g. "bfs · server · hyperlinks · depth 3"."""
+    return f"{config.strategy} · {config.scope} · {config.link_mode} · depth {config.max_depth}"
