@@ -39,6 +39,7 @@ from exploreit.frontier import Strategy
 from exploreit.graph import click_tree, compute_stats, shortest_levels
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
+from exploreit.storage import write_csv, write_sqlite
 from exploreit.urls import Scope
 
 DATA_DIR = Path("data")
@@ -83,6 +84,7 @@ class ExploreApp(App[None]):
                     yield Label("Delay between requests (s)")
                     yield Input("1.0", type="number", id="delay")
                     yield Checkbox("Respect robots.txt", value=True, id="robots")
+                    yield Checkbox("Save page content (CSV, SQLite)", id="content")
                     yield Button("Start crawl", variant="primary", id="start")
                 with Vertical(id="live"):
                     yield ProgressBar(id="progress", show_eta=False)
@@ -95,6 +97,8 @@ class ExploreApp(App[None]):
                 yield Tree("No crawl yet", id="tree")
             with TabPane("Pages", id="pages"):
                 yield DataTable(id="pages-table", cursor_type="row")
+            with TabPane("Content", id="content-tab"):
+                yield DataTable(id="content-table", cursor_type="row")
         yield Footer()
 
     @on(Button.Pressed, "#start")
@@ -122,6 +126,7 @@ class ExploreApp(App[None]):
                 "max_pages": self.query_one("#max-pages", Input).value,
                 "delay": self.query_one("#delay", Input).value,
                 "respect_robots": self.query_one("#robots", Checkbox).value,
+                "store_content": self.query_one("#content", Checkbox).value,
             }
         )
 
@@ -131,6 +136,9 @@ class ExploreApp(App[None]):
         path = DATA_DIR / f"crawl-{datetime.now():%Y%m%d-%H%M%S}.json"
         result.save(path)
         write_html(result, path.with_suffix(".html"))
+        if result.contents:
+            write_csv(result.contents, path.with_suffix(".csv"))
+            write_sqlite(result, path.with_suffix(".sqlite"))
         self.call_from_thread(self._show_result, result, path)
 
     def _show_page(self, page: CrawledPage) -> None:
@@ -150,10 +158,12 @@ class ExploreApp(App[None]):
         self._fill_summary(result)
         self._fill_tree(result)
         self._fill_pages(result)
+        self._fill_content(result)
         self.query_one("#start", Button).disabled = False
         self.query_one(TabbedContent).active = "results"
         self.query_one("#tree", Tree).focus()
-        self.notify(f"{len(result.pages)} pages saved to {path}", title="Crawl finished")
+        saved = f"{path}" + (" (+ .csv, .sqlite)" if result.contents else "")
+        self.notify(f"{len(result.pages)} pages saved to {saved}", title="Crawl finished")
 
     def _fill_summary(self, result: CrawlResult) -> None:
         stats = compute_stats(result)
@@ -187,6 +197,19 @@ class ExploreApp(App[None]):
         if children:
             add(tree.root, start)
         tree.root.expand()
+
+    def _fill_content(self, result: CrawlResult) -> None:
+        table = self.query_one("#content-table", DataTable)
+        table.clear(columns=True)
+        table.add_columns("URL", "Title", "Description", "Keywords", "Body words")
+        for content in result.contents:
+            table.add_row(
+                content.url,
+                _shorten(content.title, 50),
+                _shorten(content.description, 60),
+                _shorten(", ".join(content.keywords), 40),
+                len(content.body.split()),
+            )
 
     def _fill_pages(self, result: CrawlResult) -> None:
         levels = shortest_levels(result)
@@ -222,3 +245,7 @@ def _short_label(url: str, start: str) -> str:
     if parts.netloc != urlsplit(start).netloc:
         return url
     return parts.path + (f"?{parts.query}" if parts.query else "")
+
+
+def _shorten(text: str, width: int) -> str:
+    return text if len(text) <= width else text[: width - 1] + "…"

@@ -29,6 +29,7 @@ def test_crawl_from_form_shows_results(tmp_path: Path, monkeypatch: pytest.Monke
             app.query_one("#url", Input).value = SITE
             app.query_one("#delay", Input).value = "0"
             app.query_one("#robots", Checkbox).value = False
+            app.query_one("#content", Checkbox).value = True
 
             await pilot.click("#start")
             await pilot.pause()
@@ -39,6 +40,7 @@ def test_crawl_from_form_shows_results(tmp_path: Path, monkeypatch: pytest.Monke
             tree: Tree[None] = app.query_one("#tree", Tree)
             assert [str(node.label) for node in tree.root.children] == ["/a", "/b"]
             assert app.query_one("#pages-table", DataTable).row_count == 4
+            assert app.query_one("#content-table", DataTable).row_count == 4
             assert not app.query_one("#start", Button).disabled
             assert not app.query_one("#open-graph", Button).disabled
 
@@ -46,6 +48,8 @@ def test_crawl_from_form_shows_results(tmp_path: Path, monkeypatch: pytest.Monke
 
     assert len(list(tmp_path.glob("crawl-*.json"))) == 1
     assert len(list(tmp_path.glob("crawl-*.html"))) == 1
+    assert len(list(tmp_path.glob("crawl-*.csv"))) == 1
+    assert len(list(tmp_path.glob("crawl-*.sqlite"))) == 1
 
 
 def test_invalid_settings_are_reported(monkeypatch: pytest.MonkeyPatch) -> None:

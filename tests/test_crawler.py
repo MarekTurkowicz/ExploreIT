@@ -127,3 +127,13 @@ def test_result_survives_json_round_trip(tmp_path: Path) -> None:
     result.save(path)
 
     assert CrawlResult.load(path) == result
+
+
+@pytest.mark.usefixtures("site")
+def test_content_is_stored_only_when_asked() -> None:
+    assert run().contents == []
+
+    contents = run(store_content=True).contents
+
+    assert [content.url for content in contents] == [page.url for page in run().pages]
+    assert contents[3].body == "Leaf"

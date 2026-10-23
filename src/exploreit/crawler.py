@@ -4,23 +4,28 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from exploreit.config import CrawlConfig
+from exploreit.content import extract_content
 from exploreit.fetcher import Fetcher, FetchError
 from exploreit.frontier import Frontier
-from exploreit.models import CrawledPage, Edge
+from exploreit.models import CrawledPage, Edge, PageContent
 from exploreit.parser import extract_links
 from exploreit.urls import is_in_scope
 
 
 class CrawlResult(BaseModel):
-    """Everything a crawl produced: visited pages, links between them and failures."""
+    """Everything a crawl produced: visited pages, links between them and failures.
+
+    Page content is collected only when the config asks for it.
+    """
 
     config: CrawlConfig
     pages: list[CrawledPage]
     edges: list[Edge]
     failed: dict[str, str]
+    contents: list[PageContent] = Field(default_factory=list)
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +49,7 @@ def crawl(
     pages: list[CrawledPage] = []
     edges: list[Edge] = []
     failed: dict[str, str] = {}
+    contents: list[PageContent] = []
 
     with Fetcher(
         delay=config.delay, timeout=config.timeout, respect_robots=config.respect_robots
@@ -67,6 +73,8 @@ def crawl(
 
             if not page.html:
                 continue
+            if config.store_content:
+                contents.append(extract_content(page.html, url))
             for link in extract_links(page.html, page.url, config.link_mode):
                 edges.append(Edge(source=url, target=link.url, kind=link.kind))
                 if depth < config.max_depth and is_in_scope(
@@ -74,4 +82,4 @@ def crawl(
                 ):
                     frontier.add(link.url, depth + 1)
 
-    return CrawlResult(config=config, pages=pages, edges=edges, failed=failed)
+    return CrawlResult(config=config, pages=pages, edges=edges, failed=failed, contents=contents)

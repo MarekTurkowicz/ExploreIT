@@ -122,3 +122,39 @@ def test_experiment_command_rejects_invalid_options() -> None:
 
     assert result.exit_code == 2
     assert "start_url" in result.output
+
+
+def test_store_and_diff_commands(respx_mock: respx.MockRouter, tmp_path: Path) -> None:
+    respx_mock.get("https://example.com/").respond(
+        html='<title>Home</title><meta name="keywords" content="a,b"><a href="/x">X</a>'
+    )
+    respx_mock.get("https://example.com/x").respond(html="<title>X</title>")
+    base = ["crawl", "https://example.com", "--delay", "0", "--ignore-robots", "--content"]
+    runner.invoke(app, [*base, "-o", str(tmp_path / "a.json")])
+    runner.invoke(app, [*base, "--max-depth", "0", "-o", str(tmp_path / "b.json")])
+
+    stored = runner.invoke(
+        app,
+        ["store", str(tmp_path / "a.json"), "--field", "url", "--field", "keywords", "--sqlite"],
+    )
+    compared = runner.invoke(app, ["diff", str(tmp_path / "a.json"), str(tmp_path / "b.json")])
+
+    assert stored.exit_code == 0, stored.output
+    assert (tmp_path / "a.csv").read_text(encoding="utf-8-sig").splitlines()[1] == (
+        'https://example.com/,"a, b"'
+    )
+    assert (tmp_path / "a.sqlite").exists()
+    assert compared.exit_code == 0, compared.output
+    assert "Pages only here" in compared.output
+
+
+def test_store_command_needs_content(tmp_path: Path) -> None:
+    crawl_file = tmp_path / "crawl.json"
+    CrawlResult(
+        config=CrawlConfig(start_url="https://example.com/"), pages=[], edges=[], failed={}
+    ).save(crawl_file)
+
+    result = runner.invoke(app, ["store", str(crawl_file)])
+
+    assert result.exit_code == 1
+    assert "--content" in result.output

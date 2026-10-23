@@ -43,6 +43,11 @@ exploreit plots data/crawl.json                 # PNG charts: pages per level, l
 # Every strategy × scope × link mode combination, a CSV summary and a comparison chart
 exploreit experiment https://example.com --max-pages 50 -o data/experiments
 exploreit compare data/experiments
+
+# Page content: title, meta description, meta keywords and body text
+exploreit crawl https://example.com --scope web --max-depth 2 --content -o data/a.json
+exploreit store data/a.json --field url --field keywords --separator ";" --sqlite
+exploreit diff data/a.json data/b.json      # compare two content databases
 exploreit --help
 ```
 

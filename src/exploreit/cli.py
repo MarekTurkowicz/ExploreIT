@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from exploreit import __version__
+from exploreit.compare import summarize, url_overlap
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.experiments import (
@@ -27,6 +28,7 @@ from exploreit.graph import GraphStats, compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
 from exploreit.plots import plot_comparison, plot_levels, plot_out_links
+from exploreit.storage import ContentField, write_csv, write_sqlite
 from exploreit.tui import ExploreApp
 from exploreit.urls import Scope
 
@@ -63,11 +65,14 @@ def crawl_command(
     ignore_robots: Annotated[
         bool, typer.Option("--ignore-robots", help="Do not check robots.txt.")
     ] = False,
+    content: Annotated[
+        bool, typer.Option("--content", help="Also keep title, meta tags and body text.")
+    ] = False,
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Where to save the result.")
     ] = Path("data/crawl.json"),
 ) -> None:
-    """Crawl a website and save its link graph as JSON."""
+    """Crawl a website and save its link graph (and optionally page content) as JSON."""
     try:
         config = CrawlConfig(
             start_url=start_url,
@@ -78,6 +83,7 @@ def crawl_command(
             max_pages=max_pages,
             delay=delay,
             respect_robots=not ignore_robots,
+            store_content=content,
         )
     except ValidationError as error:
         _print_errors(error)
@@ -223,6 +229,62 @@ def compare(
     _print_comparison(directory)
 
 
+@app.command()
+def store(
+    crawl_file: Annotated[
+        Path, typer.Argument(exists=True, dir_okay=False, help="Result of crawl --content.")
+    ],
+    fields: Annotated[
+        list[ContentField],
+        typer.Option(
+            "--field",
+            default_factory=lambda: list(ContentField),
+            show_default="all",
+            help="Columns to save, in order. Repeat to pick several.",
+        ),
+    ],
+    separator: Annotated[str, typer.Option(help="CSV column separator, e.g. ';' or tab.")] = ",",
+    sqlite: Annotated[bool, typer.Option("--sqlite", help="Also save a SQLite database.")] = False,
+) -> None:
+    """Save page content of a crawl as CSV (and SQLite) next to the crawl file."""
+    result = CrawlResult.load(crawl_file)
+    if not result.contents:
+        console.print("[red]No page content in this crawl.[/] Run crawl with --content first.")
+        raise typer.Exit(code=1)
+
+    csv_file = crawl_file.with_suffix(".csv")
+    write_csv(result.contents, csv_file, fields, separator.replace("\\t", "\t"))
+    console.print(f"{len(result.contents)} pages saved to {csv_file}")
+    if sqlite:
+        sqlite_file = crawl_file.with_suffix(".sqlite")
+        write_sqlite(result, sqlite_file)
+        console.print(f"Database saved to {sqlite_file}")
+
+
+@app.command()
+def diff(
+    first: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="First crawl.")],
+    second: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Second crawl.")],
+) -> None:
+    """Compare the page content stored by two crawls."""
+    results = [CrawlResult.load(first), CrawlResult.load(second)]
+    summaries = [summarize(result) for result in results]
+
+    table = Table(title="Content databases compared")
+    table.add_column("")
+    for path in (first, second):
+        table.add_column(path.stem, overflow="fold")
+    table.add_row("Crawl", *(_crawl_label(result.config) for result in results))
+    table.add_section()
+    for (label, value_a), (_, value_b) in zip(*(s.rows() for s in summaries), strict=True):
+        table.add_row(label, escape(value_a), escape(value_b))
+    table.add_section()
+    overlap = url_overlap(*results)
+    table.add_row("Pages in both", str(overlap.common), str(overlap.common))
+    table.add_row("Pages only here", str(overlap.only_first), str(overlap.only_second))
+    console.print(table)
+
+
 def _print_comparison(directory: Path) -> None:
     table = comparison_table(load_results(directory))
     table.to_csv(directory / "summary.csv", index=False)
@@ -266,11 +328,12 @@ def _summary(result: CrawlResult, output: Path) -> Table:
 
 def _stats_table(stats: GraphStats, config: CrawlConfig) -> Table:
     table = Table(title=f"Link graph of {escape(config.start_url)}", show_header=False)
-    table.add_row(
-        "Crawl",
-        f"{config.strategy} · {config.scope} · {config.link_mode} · depth {config.max_depth}",
-    )
+    table.add_row("Crawl", _crawl_label(config))
     table.add_section()
     for label, value in stats.summary():
         table.add_row(label, escape(value))
     return table
+
+
+def _crawl_label(config: CrawlConfig) -> str:
+    return f"{config.strategy} · {config.scope} · {config.link_mode} · depth {config.max_depth}"

@@ -21,6 +21,7 @@ class CrawlConfig(BaseModel):
     delay: float = Field(default=1.0, ge=0)
     timeout: float = Field(default=10.0, gt=0)
     respect_robots: bool = True
+    store_content: bool = False
 
     @field_validator("start_url")
     @classmethod
