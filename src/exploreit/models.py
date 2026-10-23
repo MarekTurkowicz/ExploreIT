@@ -20,3 +20,14 @@ class Link(BaseModel):
 
     url: str
     kind: LinkKind
+
+
+class Page(BaseModel):
+    """A fetched page. The HTML is kept only for successful HTML responses."""
+
+    model_config = ConfigDict(frozen=True)
+
+    url: str
+    status_code: int
+    content_type: str
+    html: str = ""
