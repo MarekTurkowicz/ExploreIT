@@ -2,7 +2,7 @@ import pytest
 
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
-from exploreit.graph import GraphStats, compute_stats, shortest_levels
+from exploreit.graph import GraphStats, click_tree, compute_stats, shortest_levels
 from exploreit.models import CrawledPage, Edge, LinkKind
 
 SITE = "https://example.com"
@@ -85,6 +85,14 @@ def test_dead_ends_and_most_linked(stats: GraphStats) -> None:
     assert stats.most_linked[0] == (url("/b"), 2)
 
 
+def test_click_tree_keeps_shortest_paths() -> None:
+    tree = click_tree(RESULT)
+
+    assert tree[url("/")] == [url("/a"), url("/b")]
+    assert tree[url("/a")] == [url("/a/1"), url("/logo.png"), url("/missing")]
+    assert tree[url("/a/1")] == []
+
+
 def test_empty_crawl() -> None:
     result = CrawlResult(
         config=CrawlConfig(start_url=SITE), pages=[], edges=[], failed={url("/"): "refused"}
@@ -96,3 +104,4 @@ def test_empty_crawl() -> None:
     assert stats.pages_per_level == {}
     assert stats.subpage_links_mean == 0.0
     assert stats.failed == 1
+    assert click_tree(result) == {}

@@ -27,10 +27,24 @@ pip install -e . --group dev        # pip >= 25.1
 ```
 
 ## Usage
+Interactive terminal interface: set up a crawl, watch it run and browse the result.
 ```bash
-uv run exploreit --help
-uv run exploreit version
+exploreit ui
 ```
+
+Command line:
+```bash
+exploreit crawl https://example.com --strategy bfs --scope server --links hyperlinks \
+    --max-depth 3 --max-pages 100 -o data/crawl.json
+exploreit stats data/crawl.json
+exploreit --help
+```
+
+| Option | Values | Meaning |
+|---|---|---|
+| `--strategy` | `bfs`, `dfs` | breadth-first or depth-first traversal |
+| `--scope` | `subtree`, `server`, `web` | stay under the start path, on the start host, or go anywhere |
+| `--links` | `hyperlinks`, `images`, `all` | follow `<a>` links, also images, or every linked resource |
 
 ## Development
 With `.venv` activated, the `uv run` prefix can be omitted.

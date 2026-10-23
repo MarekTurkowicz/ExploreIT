@@ -16,6 +16,7 @@ from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
+from exploreit.tui import ExploreApp
 from exploreit.urls import Scope
 
 app = typer.Typer(help="ExploreIT: web structure exploration toolkit.", no_args_is_help=True)
@@ -31,6 +32,12 @@ def main() -> None:
 def version() -> None:
     """Show the application version."""
     typer.echo(f"exploreit {__version__}")
+
+
+@app.command()
+def ui() -> None:
+    """Open the interactive terminal interface."""
+    ExploreApp().run()
 
 
 @app.command("crawl")
@@ -107,22 +114,6 @@ def _stats_table(stats: GraphStats, config: CrawlConfig) -> Table:
         f"{config.strategy} · {config.scope} · {config.link_mode} · depth {config.max_depth}",
     )
     table.add_section()
-    table.add_row("Pages visited", f"{stats.pages} ({stats.html_pages} HTML)")
-    table.add_row("Error pages / failed", f"{stats.error_pages} / {stats.failed}")
-    table.add_row("Linked but not visited", str(stats.unvisited_targets))
-    table.add_row(
-        "Links", f"{stats.links} ({stats.internal_links} internal, {stats.external_links} external)"
-    )
-    table.add_section()
-    table.add_row("Graph depth", str(stats.depth))
-    levels = ", ".join(f"{level}: {count}" for level, count in stats.pages_per_level.items())
-    table.add_row("Pages per level", levels)
-    table.add_row("Links on start page", str(stats.start_page_links))
-    table.add_row(
-        "Links on subpages", f"{stats.subpage_links_mean:.1f} mean, {stats.subpage_links_max} max"
-    )
-    table.add_row("Pages without links", str(stats.dead_ends))
-    table.add_section()
-    for target, count in stats.most_linked:
-        table.add_row(f"Linked from {count} pages", escape(target))
+    for label, value in stats.summary():
+        table.add_row(label, escape(value))
     return table

@@ -30,6 +30,29 @@ class GraphStats(BaseModel):
     dead_ends: int
     most_linked: list[tuple[str, int]]
 
+    def summary(self) -> list[tuple[str, str]]:
+        """Return the statistics as human-readable (label, value) rows."""
+        levels = ", ".join(f"{level}: {count}" for level, count in self.pages_per_level.items())
+        rows = [
+            ("Pages visited", f"{self.pages} ({self.html_pages} HTML)"),
+            ("Error pages / failed", f"{self.error_pages} / {self.failed}"),
+            ("Linked but not visited", str(self.unvisited_targets)),
+            (
+                "Links",
+                f"{self.links} ({self.internal_links} internal, {self.external_links} external)",
+            ),
+            ("Graph depth", str(self.depth)),
+            ("Pages per level", levels),
+            ("Links on start page", str(self.start_page_links)),
+            (
+                "Links on subpages",
+                f"{self.subpage_links_mean:.1f} mean, {self.subpage_links_max} max",
+            ),
+            ("Pages without links", str(self.dead_ends)),
+        ]
+        rows += [(f"Linked from {count} pages", url) for url, count in self.most_linked]
+        return rows
+
 
 def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
     """Describe the link graph of a crawl.
@@ -67,8 +90,12 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
     )
 
 
-def shortest_levels(result: CrawlResult) -> dict[str, int]:
-    """Return the fewest clicks from the start page to every visited page (BFS)."""
+def click_tree(result: CrawlResult) -> dict[str, list[str]]:
+    """Return a breadth-first spanning tree of visited pages, rooted at the start page.
+
+    Each page maps to the pages first reached from it, so the path from the root to
+    any page is a shortest path. Pages are listed parents first.
+    """
     visited = {page.url for page in result.pages}
     start = result.config.start_url
     if start not in visited:
@@ -78,14 +105,25 @@ def shortest_levels(result: CrawlResult) -> dict[str, int]:
     for edge in result.edges:
         links[edge.source].append(edge.target)
 
-    levels = {start: 0}
+    children: dict[str, list[str]] = {start: []}
     queue = deque([start])
     while queue:
         url = queue.popleft()
         for target in links[url]:
-            if target in visited and target not in levels:
-                levels[target] = levels[url] + 1
+            if target in visited and target not in children:
+                children[url].append(target)
+                children[target] = []
                 queue.append(target)
+    return children
+
+
+def shortest_levels(result: CrawlResult) -> dict[str, int]:
+    """Return the fewest clicks from the start page to every visited page."""
+    levels: dict[str, int] = {}
+    for url, children in click_tree(result).items():
+        level = levels.setdefault(url, 0)
+        for child in children:
+            levels[child] = level + 1
     return levels
 
 
