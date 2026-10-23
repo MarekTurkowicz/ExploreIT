@@ -31,3 +31,24 @@ class Page(BaseModel):
     status_code: int
     content_type: str
     html: str = ""
+
+
+class CrawledPage(BaseModel):
+    """A page visited during a crawl: a node of the link graph."""
+
+    model_config = ConfigDict(frozen=True)
+
+    url: str
+    depth: int
+    status_code: int
+    content_type: str
+
+
+class Edge(BaseModel):
+    """A link from one page to another: an edge of the link graph."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    target: str
+    kind: LinkKind
