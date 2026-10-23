@@ -13,6 +13,7 @@ from exploreit import __version__
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.frontier import Strategy
+from exploreit.graph import GraphStats, compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
 from exploreit.urls import Scope
@@ -71,6 +72,17 @@ def crawl_command(
     console.print(_summary(result, output))
 
 
+@app.command()
+def stats(
+    crawl_file: Annotated[
+        Path, typer.Argument(exists=True, dir_okay=False, help="Result of the crawl command.")
+    ] = Path("data/crawl.json"),
+) -> None:
+    """Show the structure of a crawled link graph."""
+    result = CrawlResult.load(crawl_file)
+    console.print(_stats_table(compute_stats(result), result.config))
+
+
 def _print_page(page: CrawledPage) -> None:
     colour = "green" if page.status_code < 400 else "red"
     console.print(
@@ -85,4 +97,32 @@ def _summary(result: CrawlResult, output: Path) -> Table:
     table.add_row("Failed", str(len(result.failed)))
     table.add_row("Deepest level", str(max((page.depth for page in result.pages), default=0)))
     table.add_row("Saved to", str(output))
+    return table
+
+
+def _stats_table(stats: GraphStats, config: CrawlConfig) -> Table:
+    table = Table(title=f"Link graph of {escape(config.start_url)}", show_header=False)
+    table.add_row(
+        "Crawl",
+        f"{config.strategy} · {config.scope} · {config.link_mode} · depth {config.max_depth}",
+    )
+    table.add_section()
+    table.add_row("Pages visited", f"{stats.pages} ({stats.html_pages} HTML)")
+    table.add_row("Error pages / failed", f"{stats.error_pages} / {stats.failed}")
+    table.add_row("Linked but not visited", str(stats.unvisited_targets))
+    table.add_row(
+        "Links", f"{stats.links} ({stats.internal_links} internal, {stats.external_links} external)"
+    )
+    table.add_section()
+    table.add_row("Graph depth", str(stats.depth))
+    levels = ", ".join(f"{level}: {count}" for level, count in stats.pages_per_level.items())
+    table.add_row("Pages per level", levels)
+    table.add_row("Links on start page", str(stats.start_page_links))
+    table.add_row(
+        "Links on subpages", f"{stats.subpage_links_mean:.1f} mean, {stats.subpage_links_max} max"
+    )
+    table.add_row("Pages without links", str(stats.dead_ends))
+    table.add_section()
+    for target, count in stats.most_linked:
+        table.add_row(f"Linked from {count} pages", escape(target))
     return table

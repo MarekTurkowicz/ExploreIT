@@ -5,7 +5,9 @@ from typer.testing import CliRunner
 
 from exploreit import __version__
 from exploreit.cli import app
+from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
+from exploreit.models import CrawledPage, Edge, LinkKind
 
 runner = CliRunner()
 
@@ -41,3 +43,26 @@ def test_crawl_command_rejects_invalid_options() -> None:
     assert result.exit_code == 2
     assert "start_url" in result.output
     assert "max_pages" in result.output
+
+
+def test_stats_command_prints_graph_structure(tmp_path: Path) -> None:
+    page = CrawledPage(
+        url="https://example.com/", depth=0, status_code=200, content_type="text/html"
+    )
+    edge = Edge(source=page.url, target="https://example.com/about", kind=LinkKind.ANCHOR)
+    crawl_file = tmp_path / "crawl.json"
+    CrawlResult(config=CrawlConfig(start_url=page.url), pages=[page], edges=[edge], failed={}).save(
+        crawl_file
+    )
+
+    result = runner.invoke(app, ["stats", str(crawl_file)])
+
+    assert result.exit_code == 0, result.output
+    assert "Graph depth" in result.output
+    assert "Links on start page" in result.output
+
+
+def test_stats_command_requires_existing_file(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["stats", str(tmp_path / "missing.json")])
+
+    assert result.exit_code == 2
