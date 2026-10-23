@@ -37,6 +37,7 @@ Command line:
 exploreit crawl https://example.com --strategy bfs --scope server --links hyperlinks \
     --max-depth 3 --max-pages 100 -o data/crawl.json
 exploreit stats data/crawl.json
+exploreit graph data/crawl.json --open --gexf   # interactive HTML graph, GEXF for Gephi
 exploreit --help
 ```
 

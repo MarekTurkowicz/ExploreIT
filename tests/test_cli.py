@@ -66,3 +66,19 @@ def test_stats_command_requires_existing_file(tmp_path: Path) -> None:
     result = runner.invoke(app, ["stats", str(tmp_path / "missing.json")])
 
     assert result.exit_code == 2
+
+
+def test_graph_command_writes_html_and_gexf(tmp_path: Path) -> None:
+    page = CrawledPage(
+        url="https://example.com/", depth=0, status_code=200, content_type="text/html"
+    )
+    crawl_file = tmp_path / "crawl.json"
+    CrawlResult(config=CrawlConfig(start_url=page.url), pages=[page], edges=[], failed={}).save(
+        crawl_file
+    )
+
+    result = runner.invoke(app, ["graph", str(crawl_file), "--gexf"])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "crawl.html").exists()
+    assert (tmp_path / "crawl.gexf").exists()

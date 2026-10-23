@@ -1,5 +1,6 @@
 """Command-line interface."""
 
+import webbrowser
 from pathlib import Path
 from typing import Annotated
 
@@ -12,6 +13,7 @@ from rich.table import Table
 from exploreit import __version__
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
+from exploreit.export import write_gexf, write_html
 from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
 from exploreit.models import CrawledPage
@@ -88,6 +90,32 @@ def stats(
     """Show the structure of a crawled link graph."""
     result = CrawlResult.load(crawl_file)
     console.print(_stats_table(compute_stats(result), result.config))
+
+
+@app.command()
+def graph(
+    crawl_file: Annotated[
+        Path, typer.Argument(exists=True, dir_okay=False, help="Result of the crawl command.")
+    ] = Path("data/crawl.json"),
+    all_links: Annotated[
+        bool, typer.Option("--all-links", help="Also show linked pages that were not visited.")
+    ] = False,
+    gexf: Annotated[bool, typer.Option("--gexf", help="Also save a GEXF file for Gephi.")] = False,
+    open_browser: Annotated[
+        bool, typer.Option("--open", help="Open the graph in the web browser.")
+    ] = False,
+) -> None:
+    """Draw the link graph as an interactive HTML page next to the crawl file."""
+    result = CrawlResult.load(crawl_file)
+    html_file = crawl_file.with_suffix(".html")
+    write_html(result, html_file, visited_only=not all_links)
+    console.print(f"Graph saved to {html_file}")
+    if gexf:
+        gexf_file = crawl_file.with_suffix(".gexf")
+        write_gexf(result, gexf_file)
+        console.print(f"GEXF saved to {gexf_file}")
+    if open_browser:
+        webbrowser.open(html_file.resolve().as_uri())
 
 
 def _print_page(page: CrawledPage) -> None:

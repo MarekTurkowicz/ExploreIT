@@ -1,5 +1,6 @@
 """Interactive terminal interface: configure a crawl, watch it run and explore the result."""
 
+import webbrowser
 from collections import Counter
 from datetime import datetime
 from enum import StrEnum
@@ -33,6 +34,7 @@ from textual.widgets.tree import TreeNode
 
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
+from exploreit.export import write_html
 from exploreit.frontier import Strategy
 from exploreit.graph import click_tree, compute_stats, shortest_levels
 from exploreit.models import CrawledPage
@@ -47,6 +49,7 @@ class ExploreApp(App[None]):
     """Crawl a site from a form and browse its structure."""
 
     TITLE = "ExploreIT"
+    _graph_file = Path()
     BINDINGS: ClassVar[list[BindingType]] = [("ctrl+r", "start", "Start crawl")]
     CSS = """
     #form { width: 42; padding: 0 1; border-right: solid $panel; }
@@ -56,6 +59,7 @@ class ExploreApp(App[None]):
     #log { height: 1fr; border: round $panel; }
     #summary { width: 64; padding: 0 1; }
     #levels { margin-top: 1; }
+    #open-graph { margin-top: 1; }
     #tree { border-left: solid $panel; }
     """
 
@@ -87,6 +91,7 @@ class ExploreApp(App[None]):
                 with VerticalScroll(id="summary"):
                     yield DataTable(id="stats", show_header=False, cursor_type="none")
                     yield Static(id="levels")
+                    yield Button("Open graph in browser", id="open-graph", disabled=True)
                 yield Tree("No crawl yet", id="tree")
             with TabPane("Pages", id="pages"):
                 yield DataTable(id="pages-table", cursor_type="row")
@@ -125,6 +130,7 @@ class ExploreApp(App[None]):
         result = crawl(config, on_page=lambda page: self.call_from_thread(self._show_page, page))
         path = DATA_DIR / f"crawl-{datetime.now():%Y%m%d-%H%M%S}.json"
         result.save(path)
+        write_html(result, path.with_suffix(".html"))
         self.call_from_thread(self._show_result, result, path)
 
     def _show_page(self, page: CrawledPage) -> None:
@@ -134,7 +140,13 @@ class ExploreApp(App[None]):
         )
         self.query_one("#progress", ProgressBar).advance(1)
 
+    @on(Button.Pressed, "#open-graph")
+    def _open_graph(self) -> None:
+        webbrowser.open(self._graph_file.resolve().as_uri())
+
     def _show_result(self, result: CrawlResult, path: Path) -> None:
+        self._graph_file = path.with_suffix(".html")
+        self.query_one("#open-graph", Button).disabled = False
         self._fill_summary(result)
         self._fill_tree(result)
         self._fill_pages(result)
