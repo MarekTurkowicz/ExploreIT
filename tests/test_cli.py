@@ -82,3 +82,43 @@ def test_graph_command_writes_html_and_gexf(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert (tmp_path / "crawl.html").exists()
     assert (tmp_path / "crawl.gexf").exists()
+
+
+def test_plots_command_saves_charts(tmp_path: Path) -> None:
+    page = CrawledPage(
+        url="https://example.com/", depth=0, status_code=200, content_type="text/html"
+    )
+    crawl_file = tmp_path / "crawl.json"
+    CrawlResult(config=CrawlConfig(start_url=page.url), pages=[page], edges=[], failed={}).save(
+        crawl_file
+    )
+
+    result = runner.invoke(app, ["plots", str(crawl_file)])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "crawl-levels.png").exists()
+    assert (tmp_path / "crawl-out-links.png").exists()
+
+
+def test_experiment_command_compares_crawls(respx_mock: respx.MockRouter, tmp_path: Path) -> None:
+    respx_mock.get("https://example.com/").respond(html='<a href="/a">A</a>')
+    respx_mock.get("https://example.com/a").respond(html="<p>A</p>")
+    args = ["experiment", "https://example.com", "--strategy", "bfs", "--strategy", "dfs"]
+    args += ["--scope", "server", "--links", "hyperlinks", "--delay", "0", "--ignore-robots"]
+
+    result = runner.invoke(app, [*args, "-o", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "2/2 dfs-server-hyperlinks" in result.output
+    assert (tmp_path / "summary.csv").read_text().count("\n") == 3
+    assert (tmp_path / "comparison.png").exists()
+
+    rerun = runner.invoke(app, ["compare", str(tmp_path)])
+    assert rerun.exit_code == 0, rerun.output
+
+
+def test_experiment_command_rejects_invalid_options() -> None:
+    result = runner.invoke(app, ["experiment", "not-a-url", "--scope", "server"])
+
+    assert result.exit_code == 2
+    assert "start_url" in result.output

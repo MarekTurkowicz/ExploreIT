@@ -38,6 +38,11 @@ exploreit crawl https://example.com --strategy bfs --scope server --links hyperl
     --max-depth 3 --max-pages 100 -o data/crawl.json
 exploreit stats data/crawl.json
 exploreit graph data/crawl.json --open --gexf   # interactive HTML graph, GEXF for Gephi
+exploreit plots data/crawl.json                 # PNG charts: pages per level, links per page
+
+# Every strategy × scope × link mode combination, a CSV summary and a comparison chart
+exploreit experiment https://example.com --max-pages 50 -o data/experiments
+exploreit compare data/experiments
 exploreit --help
 ```
 
