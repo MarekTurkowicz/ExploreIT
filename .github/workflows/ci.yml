@@ -28,4 +28,5 @@ jobs:
         run: uv run mypy
 
       - name: Test
-        run: uv run pytest --cov
+        # The desktop application tests need a display; xvfb provides a virtual one.
+        run: xvfb-run --auto-servernum uv run pytest --cov

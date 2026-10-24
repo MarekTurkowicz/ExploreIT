@@ -11,7 +11,7 @@ from exploreit.crawler import CrawlResult, crawl
 from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
 from exploreit.parser import LinkMode
-from exploreit.plots import plot_comparison
+from exploreit.plots import comparison_figure, save_figure
 from exploreit.urls import Scope
 
 PARAMETERS = ["strategy", "scope", "link_mode"]
@@ -98,7 +98,7 @@ def save_comparison(results: Iterable[CrawlResult], directory: Path) -> pd.DataF
         raise ValueError(f"no crawl results in {directory}")
     directory.mkdir(parents=True, exist_ok=True)
     table.to_csv(directory / SUMMARY_FILE, index=False)
-    plot_comparison(table, directory / CHART_FILE)
+    save_figure(comparison_figure(table), directory / CHART_FILE)
     return table
 
 

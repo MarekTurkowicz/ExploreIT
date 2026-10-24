@@ -8,6 +8,9 @@ as a link graph, stores page content and analyses how crawl parameters affect th
 - Link graph with structural statistics (depth, out/in-degree, pages per level)
 - Content extraction (URL, title, description, keywords, body) to CSV and SQLite
 - Comparison of datasets produced with different crawl settings
+- Link graph drawn in the app (by level or force-directed), exported as interactive HTML
+  or GEXF for Gephi
+- Desktop application (Tkinter) and a command line for scripted experiments
 
 ## Requirements
 - Python 3.12+
@@ -27,7 +30,8 @@ pip install -e . --group dev        # pip >= 25.1
 ```
 
 ## Usage
-Interactive terminal interface: set up a crawl, watch it run and browse the result.
+Desktop application: set up a crawl, watch it run, explore the link graph, run
+parameter experiments and compare content databases.
 ```bash
 exploreit ui
 ```
