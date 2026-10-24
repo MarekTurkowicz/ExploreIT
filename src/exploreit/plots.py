@@ -4,20 +4,16 @@ as PNG or shown inside the application window."""
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
 
-import networkx as nx
-import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
 
 from exploreit.crawler import CrawlResult
-from exploreit.export import build_graph, node_colour
 from exploreit.graph import compute_stats
 
 SERIES = ["#2a78d6", "#eb6834"]  # categorical slots 1-2: blue, orange
@@ -27,8 +23,6 @@ INK_SECONDARY = "#52514e"
 MUTED = "#898781"
 GRID = "#e1e0d9"
 BASELINE = "#c3c2b7"
-LABELLED_NODES_LIMIT = 60
-ARROWS_EDGES_LIMIT = 400  # arrow heads are slow to draw on big graphs
 
 COMPARED_METRICS = {
     "pages": "Pages visited",
@@ -36,18 +30,6 @@ COMPARED_METRICS = {
     "depth": "Graph depth",
     "subpage_links_mean": "Mean links per subpage",
 }
-
-Layout = Literal["levels", "spring"]
-
-
-@dataclass(frozen=True)
-class GraphDrawing:
-    """A drawn link graph and where each page ended up, for hover and click handling."""
-
-    figure: Figure
-    axes: Axes
-    urls: list[str]
-    positions: np.ndarray
 
 
 def levels_figure(result: CrawlResult) -> Figure:
@@ -107,83 +89,55 @@ def comparison_figure(table: pd.DataFrame) -> Figure:
     return figure
 
 
-def graph_figure(
-    result: CrawlResult, layout: Layout = "levels", visited_only: bool = True
-) -> GraphDrawing:
-    """Draw the link graph: colour shows the level, size the number of incoming links.
-
-    The "levels" layout reads like a site map: the start page on the left and every
-    level in its own column. The "spring" layout lets linked pages pull together.
-    """
-    graph = build_graph(result, visited_only=visited_only)
-    figure = Figure(figsize=(10, 7), facecolor=SURFACE, layout="constrained")
+def network_figure(
+    edges: list[tuple[str, str]],
+    positions: dict[str, tuple[float, float]],
+    colours: dict[str, str],
+    sizes: dict[str, float],
+    labels: dict[str, str],
+    title: str,
+) -> Figure:
+    """Draw a graph exactly as laid out on screen (y grows downwards) for saving as PNG."""
+    figure = Figure(figsize=(12, 8), facecolor=SURFACE, layout="constrained")
     ax = figure.subplots()
     ax.set_facecolor(SURFACE)
     ax.set_axis_off()
-    urls = list(graph.nodes)
-    if not urls:
-        ax.text(0.5, 0.5, "No pages to draw", ha="center", color=MUTED, transform=ax.transAxes)
-        return GraphDrawing(figure, ax, [], np.empty((0, 2)))
+    ax.set_title(title, loc="left", fontsize=10, color=INK)
+    if not positions:
+        return figure
 
-    positions = _layout(graph, layout)
-    in_degree = Counter(target for _, target in graph.edges)
-    if graph.number_of_edges() <= ARROWS_EDGES_LIMIT:
-        nx.draw_networkx_edges(
-            graph, positions, ax=ax, edge_color=MUTED, alpha=0.35, width=0.6, arrowsize=6
-        )
-    else:
-        nx.draw_networkx_edges(
-            graph, positions, ax=ax, edge_color=MUTED, alpha=0.25, width=0.4, arrows=False
-        )
-    nx.draw_networkx_nodes(
-        graph,
-        positions,
-        ax=ax,
-        node_color=[node_colour(graph.nodes[url]) for url in urls],
-        node_size=[30 + 12 * min(in_degree[url], 20) for url in urls],
+    segments = [(positions[a], positions[b]) for a, b in edges]
+    ax.add_collection(LineCollection(segments, colors=MUTED, linewidths=0.5, alpha=0.4))
+    urls = list(positions)
+    xs, ys = zip(*(positions[url] for url in urls), strict=True)
+    ax.scatter(
+        xs,
+        ys,
+        s=[sizes[url] ** 2 for url in urls],
+        c=[colours[url] for url in urls],
         edgecolors=SURFACE,
-        linewidths=0.8,
+        linewidths=0.6,
+        zorder=2,
     )
-    if len(urls) <= LABELLED_NODES_LIMIT:
-        xs = [x for x, _ in positions.values()]
-        gap = (max(xs) - min(xs) or 1) * 0.012
-        for url in urls:
-            x, y = positions[url]
-            label = _short_label(url, result.config.start_url)
-            ax.text(x + gap, y, label, fontsize=7, color=INK_SECONDARY, va="center")
-    ax.set_title(
-        f"{result.config.start_url} · {graph.number_of_nodes()} pages · "
-        f"{graph.number_of_edges()} links",
-        loc="left",
-        fontsize=10,
-        color=INK,
-    )
-    return GraphDrawing(figure, ax, urls, np.array([positions[url] for url in urls]))
+    for url, text in labels.items():
+        x, y = positions[url]
+        ax.annotate(
+            text,
+            (x, y),
+            xytext=(6, 0),
+            textcoords="offset points",
+            fontsize=7,
+            color=INK_SECONDARY,
+            va="center",
+        )
+    ax.invert_yaxis()
+    ax.margins(0.04)
+    return figure
 
 
 def save_figure(figure: Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=150)
-
-
-def _layout(graph: nx.DiGraph[str], layout: Layout) -> dict[str, tuple[float, float]]:
-    if layout == "spring":
-        return {node: (x, y) for node, (x, y) in nx.spring_layout(graph, seed=1).items()}
-    levels = {node: int(graph.nodes[node]["level"]) for node in graph}
-    deepest = max(levels.values(), default=0)
-    for node, level in levels.items():
-        # Pages that were linked but never visited go on an extra row at the bottom.
-        graph.nodes[node]["row"] = level if level >= 0 else deepest + 1
-    positions = nx.multipartite_layout(graph, subset_key="row", align="vertical")
-    return {node: (x, y) for node, (x, y) in positions.items()}
-
-
-def _short_label(url: str, start_url: str) -> str:
-    """The path for pages under the start page's address, the whole URL otherwise."""
-    parts, start = urlsplit(url), urlsplit(start_url)
-    if (parts.scheme, parts.netloc) != (start.scheme, start.netloc):
-        return url
-    return parts.path + (f"?{parts.query}" if parts.query else "")
 
 
 def _figure(width: float, height: float) -> tuple[Figure, Axes]:

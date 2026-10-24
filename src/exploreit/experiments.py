@@ -24,6 +24,7 @@ SUMMARY_COLUMNS = [
     "start_page_links",
     "subpage_links_mean",
     "dead_ends",
+    "crawl_seconds",
 ]
 SUMMARY_FILE = "summary.csv"
 CHART_FILE = "comparison.png"

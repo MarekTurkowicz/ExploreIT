@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING
 
+import ttkbootstrap as tb
 from pydantic import ValidationError
 
 from exploreit.compare import comparison_rows
@@ -42,7 +43,7 @@ class CompareTab(ttk.Frame):
             ttk.Button(form, text="Browse…", command=partial(self._browse, variable)).grid(
                 row=row, column=2, pady=4
             )
-        ttk.Button(form, text="Compare", style="Accent.TButton", command=self.compare).grid(
+        tb.Button(form, text="Compare", command=self.compare, bootstyle="primary").grid(
             row=2, column=1, sticky="w", padx=6, pady=(6, 0)
         )
         self.table = Table(self)

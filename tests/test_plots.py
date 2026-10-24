@@ -1,15 +1,13 @@
 from pathlib import Path
 
-import pytest
-
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 from exploreit.experiments import comparison_table
 from exploreit.models import CrawledPage, Edge, LinkKind
 from exploreit.plots import (
     comparison_figure,
-    graph_figure,
     levels_figure,
+    network_figure,
     out_links_figure,
     save_figure,
 )
@@ -51,28 +49,17 @@ def test_comparison_chart(tmp_path: Path) -> None:
     assert (tmp_path / "comparison.png").read_bytes().startswith(PNG_SIGNATURE)
 
 
-@pytest.mark.parametrize("layout", ["levels", "spring"])
-def test_graph_drawing_places_every_page(layout: str) -> None:
-    drawing = graph_figure(result(), layout)  # type: ignore[arg-type]
+def test_network_figure_draws_saved_positions(tmp_path: Path) -> None:
+    positions = {"a": (0.0, 0.0), "b": (1.0, 1.0)}
 
-    assert drawing.urls == [START, f"{START}a", f"{START}gone"]
-    assert drawing.positions.shape == (3, 2)
+    figure = network_figure(
+        [("a", "b")], positions, {"a": "#000000", "b": "#ffffff"}, {"a": 5, "b": 8}, {"a": "A"}, "t"
+    )
+    save_figure(figure, tmp_path / "graph.png")
 
-
-def test_levels_layout_puts_each_level_in_its_own_column() -> None:
-    drawing = graph_figure(result(), "levels")
-    x = dict(zip(drawing.urls, drawing.positions[:, 0], strict=True))
-
-    assert x[START] < x[f"{START}a"] == x[f"{START}gone"]
+    assert (tmp_path / "graph.png").read_bytes().startswith(PNG_SIGNATURE)
+    assert figure.axes[0].yaxis_inverted()
 
 
-def test_graph_drawing_can_include_unvisited_pages() -> None:
-    drawing = graph_figure(result(), "levels", visited_only=False)
-
-    assert "https://other.org/" in drawing.urls
-
-
-def test_graph_drawing_of_an_empty_crawl() -> None:
-    empty = CrawlResult(config=CrawlConfig(start_url=START), pages=[], edges=[], failed={})
-
-    assert graph_figure(empty).urls == []
+def test_network_figure_of_nothing() -> None:
+    assert len(network_figure([], {}, {}, {}, {}, "empty").axes[0].collections) == 0

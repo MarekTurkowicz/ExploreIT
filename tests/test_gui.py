@@ -9,6 +9,7 @@ import respx
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 from exploreit.gui import ExploreApp
+from exploreit.gui.app import create_window
 from exploreit.gui.widgets import Table
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
 from exploreit.storage import ContentField
@@ -17,19 +18,14 @@ SITE = "https://example.com"
 
 
 @pytest.fixture
-def root() -> Iterator[tk.Tk]:
+def app(tmp_path: Path) -> Iterator[ExploreApp]:
     try:
-        window = tk.Tk()
+        root, app = create_window(tmp_path)
     except tk.TclError:
         pytest.skip("no display available")
-    window.withdraw()
-    yield window
-    window.destroy()
-
-
-@pytest.fixture
-def app(root: tk.Tk, tmp_path: Path) -> ExploreApp:
-    return ExploreApp(root, tmp_path)
+    root.withdraw()
+    yield app
+    root.destroy()
 
 
 @pytest.fixture
@@ -99,7 +95,9 @@ def test_crawl_fills_every_tab_and_saves_outputs(app: ExploreApp, tmp_path: Path
     assert app.notebook.select() == str(app.results_tab)
     assert len(app.pages_tab.table.rows()) == 4
     assert len(app.content_tab.table.rows()) == 4
-    assert app.graph_tab.drawing.urls[0] == f"{SITE}/"
+    assert len(app.graph_tab.canvas.data.nodes) == 4
+    assert app.crawl_tab.timer.get().startswith("✔")
+    assert str(app.crawl_tab.start_button["state"]) != "disabled"
     (csv_file,) = tmp_path.glob("crawl-*.csv")
     assert csv_file.read_text(encoding="utf-8-sig").splitlines()[:2] == [
         "url;keywords",
@@ -133,17 +131,70 @@ def test_open_saved_crawl_and_export(app: ExploreApp, tmp_path: Path) -> None:
     assert (tmp_path / "old.gexf").exists()
 
 
-def test_graph_hover_finds_the_nearest_page(app: ExploreApp, tmp_path: Path) -> None:
+def test_graph_hover_drag_and_zoom(app: ExploreApp, tmp_path: Path) -> None:
+    crawl_file = tmp_path / "old.json"
+    save_crawl(crawl_file, [])
+    app.results_tab.open_file(crawl_file)
+    settle(app)
+    app.notebook.select(app.graph_tab)
+    settle(app)
+    canvas = app.graph_tab.canvas
+    page = f"{SITE}/a"
+    x, y = canvas.screen(page)
+
+    assert canvas.node_at(x, y) == page
+    canvas._set_hovered(page)
+    assert canvas.find_withtag("tip")
+    assert app.graph_tab.details.cget("text").startswith(page)
+
+    canvas.move_node(page, 40, -10)
+    assert canvas.screen(page) == pytest.approx((x + 40, y - 10))
+
+    canvas.zoom_at(2.0, x + 40, y - 10)
+    assert canvas.screen(page) == pytest.approx((x + 40, y - 10))
+    canvas.fit()
+    assert canvas.zoom == 1.0
+
+    app.graph_tab.save_png()
+    assert (tmp_path / "old-graph.png").exists()
+
+
+def test_graph_styles_and_legend(app: ExploreApp, tmp_path: Path) -> None:
     crawl_file = tmp_path / "old.json"
     save_crawl(crawl_file, [])
     app.results_tab.open_file(crawl_file)
     settle(app)
 
-    drawing = app.graph_tab.drawing
-    x, y = drawing.axes.transData.transform(drawing.positions[1])
+    app.graph_tab.colour_by.set("host")
+    app.graph_tab.restyle()
+    app.graph_tab.unvisited.set(True)
+    app.graph_tab.reload()
+    settle(app)
 
-    assert app.graph_tab.url_at(x + 2, y - 2) == f"{SITE}/a"
-    assert app.graph_tab.url_at(x + 500, y + 500) == ""
+    legend_rows = app.graph_tab.legend.winfo_children()
+    assert len(legend_rows) == 1  # every page is on example.com
+    assert app.graph_tab.summary.cget("text") == "2 pages · 1 link"
+
+
+@pytest.mark.usefixtures("site")
+def test_settings_are_locked_while_crawling(app: ExploreApp) -> None:
+    fill_form(app)
+
+    app.crawl_tab.start()
+
+    assert app.crawl_tab.running
+    assert all(widget.instate(["disabled"]) for widget in app.crawl_tab.inputs)
+    assert app.experiments_tab.run_button.instate(["disabled"])
+    settle(app)
+    assert not any(widget.instate(["disabled"]) for widget in app.crawl_tab.inputs)
+
+
+def test_theme_and_font_size(app: ExploreApp) -> None:
+    app.set_theme("one-dark")
+    app.set_font_size(30)
+
+    assert app.font_size.get() == 20  # clamped to the largest size
+    assert app.root.style.theme_use() == "one-dark"
 
 
 @pytest.mark.usefixtures("site")
@@ -193,8 +244,8 @@ def test_compare_two_saved_crawls(app: ExploreApp, tmp_path: Path) -> None:
     assert sorted(tab.pickers[0]["values"]) == ["a.json", "b.json"]
 
 
-def test_table_sorts_numbers_numerically(root: tk.Tk) -> None:
-    table = Table(root)
+def test_table_sorts_numbers_numerically(app: ExploreApp) -> None:
+    table = Table(app.root)
     table.set_rows(["Name", "Links"], [("a", 10), ("b", 9), ("c", 100)])
 
     table._sort("Links")

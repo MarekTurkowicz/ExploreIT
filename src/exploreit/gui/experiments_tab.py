@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import tkinter as tk
 from enum import StrEnum
 from pathlib import Path
@@ -9,6 +10,7 @@ from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 import pandas as pd
+import ttkbootstrap as tb
 from pydantic import ValidationError
 
 from exploreit.config import CrawlConfig
@@ -21,7 +23,8 @@ from exploreit.experiments import (
     save_comparison,
 )
 from exploreit.frontier import Strategy
-from exploreit.gui.widgets import ChartPanel, Table, describe_errors, timestamp
+from exploreit.graph import format_duration
+from exploreit.gui.widgets import ChartPanel, Table, describe_errors, show_error, timestamp
 from exploreit.parser import LinkMode
 from exploreit.plots import comparison_figure
 from exploreit.urls import Scope
@@ -38,6 +41,9 @@ class ExperimentsTab(ttk.Frame):
     def __init__(self, master: tk.Misc, app: ExploreApp) -> None:
         super().__init__(master, padding=12)
         self.app = app
+        self.running = False
+        self._started = 0.0
+        self.boxes: list[ttk.Checkbutton] = []  # locked while experiments run
         ttk.Label(
             self,
             text="Uses the start URL, depth, page limit and delay from the Crawl tab. "
@@ -45,20 +51,20 @@ class ExperimentsTab(ttk.Frame):
         ).pack(anchor="w")
 
         groups = ttk.Frame(self)
-        groups.pack(fill="x", pady=8)
-        self.strategies = _checkboxes(groups, "Strategy", Strategy)
-        self.scopes = _checkboxes(groups, "Scope", Scope)
-        self.link_modes = _checkboxes(groups, "Links", LinkMode)
+        groups.pack(fill="x", pady=10)
+        self.strategies = self._checkboxes(groups, "Strategy", Strategy)
+        self.scopes = self._checkboxes(groups, "Scope", Scope)
+        self.link_modes = self._checkboxes(groups, "Links", LinkMode)
 
         actions = ttk.Frame(self)
-        actions.pack(fill="x", pady=(0, 8))
-        self.run_button = ttk.Button(
-            actions, text="Run experiments", style="Accent.TButton", command=self.run
+        actions.pack(fill="x", pady=(0, 10))
+        self.run_button = tb.Button(
+            actions, text="Run experiments", command=self.run, bootstyle="primary"
         )
         self.run_button.pack(side="left")
-        self.progress = ttk.Progressbar(actions, mode="determinate")
+        self.progress = tb.Progressbar(actions, mode="determinate", bootstyle="striped")
         self.progress.pack(side="left", fill="x", expand=True, padx=12)
-        self.current = ttk.Label(actions, text="", width=40)
+        self.current = ttk.Label(actions, text="", width=46)
         self.current.pack(side="left")
 
         panes = ttk.PanedWindow(self, orient="vertical")
@@ -68,15 +74,32 @@ class ExperimentsTab(ttk.Frame):
         self.chart = ChartPanel(panes)
         panes.add(self.chart, weight=2)
 
+    def _checkboxes[E: StrEnum](
+        self, master: ttk.Frame, title: str, options: type[E]
+    ) -> dict[E, tk.BooleanVar]:
+        frame = ttk.LabelFrame(master, text=title, padding=10)
+        frame.pack(side="left", fill="y", padx=(0, 12))
+        ticks = {option: tk.BooleanVar(value=True) for option in options}
+        for option, variable in ticks.items():
+            box = ttk.Checkbutton(frame, text=option.value, variable=variable)
+            box.pack(anchor="w", pady=2)
+            self.boxes.append(box)
+        return ticks
+
+    def set_locked(self, locked: bool) -> None:
+        state = ["disabled"] if locked else ["!disabled"]
+        for widget in [*self.boxes, self.run_button]:
+            widget.state(state)
+
     def run(self) -> None:
-        if str(self.run_button["state"]) == "disabled":
+        if self.running or self.app.crawl_tab.running:
             return
         try:
             base = self.app.crawl_tab.read_config()
         except ValidationError as error:
             messagebox.showerror("Check the Crawl tab", describe_errors(error))
             return
-        chosen = [_ticked(boxes) for boxes in (self.strategies, self.scopes, self.link_modes)]
+        chosen = [_ticked(ticks) for ticks in (self.strategies, self.scopes, self.link_modes)]
         if not all(chosen):
             messagebox.showerror("Experiments", "Tick at least one value in every group.")
             return
@@ -90,10 +113,13 @@ class ExperimentsTab(ttk.Frame):
             **base.model_dump(include=SHARED_SETTINGS),
         )
         out_dir = self.app.data_dir / f"experiments-{timestamp()}"
-        self.run_button.state(["disabled"])
+        self.running = True
+        self.app.set_busy(True)
+        self._started = time.monotonic()
         self.progress.configure(maximum=len(configs), value=0)
+        self.current.configure(text=f"0 of {len(configs)} crawls")
         self.app.set_status(f"Running {len(configs)} crawls into {out_dir} …")
-        self.app.tasks.run(lambda: self._experiment(configs, out_dir), self._finish)
+        self.app.tasks.run(lambda: self._experiment(configs, out_dir), self._finish, self._failed)
 
     def _experiment(self, configs: list[CrawlConfig], out_dir: Path) -> tuple[pd.DataFrame, Path]:
         """Runs in a background thread."""
@@ -104,30 +130,31 @@ class ExperimentsTab(ttk.Frame):
 
     def _crawled(self, config: CrawlConfig, result: CrawlResult) -> None:
         self.progress.step(1)
-        self.current.configure(text=f"{experiment_name(config)}: {len(result.pages)} pages")
+        elapsed = format_duration(time.monotonic() - self._started)
+        self.current.configure(
+            text=f"⏱ {elapsed} · {experiment_name(config)}: {len(result.pages)} pages"
+        )
+
+    def _stop(self) -> None:
+        self.running = False
+        self.app.set_busy(False)
+
+    def _failed(self, error: Exception) -> None:
+        self._stop()
+        show_error(error)
 
     def _finish(self, outcome: tuple[pd.DataFrame, Path]) -> None:
         table, out_dir = outcome
-        self.run_button.state(["!disabled"])
+        self._stop()
+        self.current.configure(text=f"✔ {format_duration(time.monotonic() - self._started)}")
         rows = (
             [f"{value:.1f}" if isinstance(value, float) else value for value in row]
             for row in table[SUMMARY_COLUMNS].itertuples(index=False)
         )
-        self.table.set_rows([c.replace("_", " ") for c in SUMMARY_COLUMNS], rows, widths=[80] * 10)
+        self.table.set_rows([c.replace("_", " ") for c in SUMMARY_COLUMNS], rows, widths=[90] * 11)
         self.chart.show(comparison_figure(table))
         self.app.set_status(f"Experiments saved to {out_dir} (summary.csv, comparison.png)")
 
 
-def _checkboxes[E: StrEnum](
-    master: ttk.Frame, title: str, options: type[E]
-) -> dict[E, tk.BooleanVar]:
-    frame = ttk.LabelFrame(master, text=title, padding=8)
-    frame.pack(side="left", fill="y", padx=(0, 10))
-    boxes = {option: tk.BooleanVar(value=True) for option in options}
-    for option, variable in boxes.items():
-        ttk.Checkbutton(frame, text=option.value, variable=variable).pack(anchor="w")
-    return boxes
-
-
-def _ticked[E: StrEnum](boxes: dict[E, tk.BooleanVar]) -> list[E]:
-    return [option for option, variable in boxes.items() if variable.get()]
+def _ticked[E: StrEnum](ticks: dict[E, tk.BooleanVar]) -> list[E]:
+    return [option for option, variable in ticks.items() if variable.get()]

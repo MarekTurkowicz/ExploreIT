@@ -157,15 +157,23 @@ class PagesTab(ttk.Frame):
 class ContentTab(ttk.Frame):
     """Stored page content: a table of pages and the full text of the selected one."""
 
-    def __init__(self, master: tk.Misc) -> None:
+    def __init__(self, master: tk.Misc, app: ExploreApp) -> None:
         super().__init__(master, padding=12)
+        self.app = app
         self.bodies: dict[str, str] = {}
         panes = ttk.PanedWindow(self, orient="vertical")
         panes.pack(fill="both", expand=True)
         self.table = Table(panes, on_select=self._show_details)
         panes.add(self.table, weight=3)
-        self.details = ScrolledText(panes, height=8, wrap="word")
+        self.details = ScrolledText(panes, height=8, wrap="word", relief="flat", borderwidth=8)
         panes.add(self.details, weight=1)
+        self.apply_theme()
+
+    def apply_theme(self) -> None:
+        colours = self.app.theme_colours()
+        self.details.configure(
+            background=colours.inputbg, foreground=colours.inputfg, font="TkTextFont"
+        )
 
     def show(self, result: CrawlResult) -> None:
         self.bodies = {content.url: content.body for content in result.contents}

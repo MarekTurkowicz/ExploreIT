@@ -27,6 +27,7 @@ class GraphStats(BaseModel):
     subpage_links_max: int
     dead_ends: int
     most_linked: list[tuple[str, int]]
+    crawl_seconds: float
 
     def summary(self) -> list[tuple[str, str]]:
         """Return the statistics as human-readable (label, value) rows."""
@@ -47,6 +48,7 @@ class GraphStats(BaseModel):
                 f"{self.subpage_links_mean:.1f} mean, {self.subpage_links_max} max",
             ),
             ("Pages without links", str(self.dead_ends)),
+            ("Crawl time", format_duration(self.crawl_seconds)),
         ]
         rows += [(f"Linked from {count} pages", url) for url, count in self.most_linked]
         return rows
@@ -85,7 +87,14 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
         subpage_links_max=max(subpage_links, default=0),
         dead_ends=sum(out_degree[page.url] == 0 for page in html),
         most_linked=in_degree.most_common(top),
+        crawl_seconds=round(result.duration, 1),
     )
+
+
+def format_duration(seconds: float) -> str:
+    """Format seconds as "m:ss", e.g. 75.4 -> "1:15"."""
+    minutes, rest = divmod(round(seconds), 60)
+    return f"{minutes}:{rest:02d}"
 
 
 def click_tree(result: CrawlResult) -> dict[str, list[str]]:

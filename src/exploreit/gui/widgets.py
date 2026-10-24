@@ -30,21 +30,28 @@ class TaskRunner:
         self._root = root
         self._calls: queue.Queue[Callable[[], object]] = queue.Queue()
         self._running = 0
+        self._after = ""
+        root.bind("<Destroy>", self._stop, add="+")
         self._poll()
 
     @property
     def busy(self) -> bool:
         return self._running > 0 or not self._calls.empty()
 
-    def run[T](self, work: Callable[[], T], on_done: Callable[[T], object]) -> None:
-        """Run work() in a thread, then on_done(result) in the Tk thread."""
+    def run[T](
+        self,
+        work: Callable[[], T],
+        on_done: Callable[[T], object],
+        on_error: Callable[[Exception], object] = lambda error: show_error(error),
+    ) -> None:
+        """Run work() in a thread, then on_done(result), or on_error(error), in the Tk thread."""
         self._running += 1
 
         def target() -> None:
             try:
                 result = work()
             except Exception as error:  # show any failure in the window instead of losing it
-                self.call(_show_error, error)
+                self.call(on_error, error)
             else:
                 self.call(on_done, result)
             finally:
@@ -62,7 +69,11 @@ class TaskRunner:
     def _poll(self) -> None:
         while not self._calls.empty():
             self._calls.get_nowait()()
-        self._root.after(POLL_MS, self._poll)
+        self._after = self._root.after(POLL_MS, self._poll)
+
+    def _stop(self, event: tk.Event[tk.Misc]) -> None:
+        if event.widget is self._root:  # children send <Destroy> too
+            self._root.after_cancel(self._after)
 
 
 class Table(ttk.Frame):
@@ -152,7 +163,7 @@ def describe_errors(error: ValidationError) -> str:
     return "\n".join(f"{problem['loc'][0]}: {problem['msg']}" for problem in error.errors())
 
 
-def _show_error(error: Exception) -> None:
+def show_error(error: Exception) -> None:
     messagebox.showerror("ExploreIT", f"{type(error).__name__}: {error}")
 
 

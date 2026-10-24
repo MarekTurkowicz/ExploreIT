@@ -1,5 +1,6 @@
 """The crawl loop: fetch pages, extract links and record the link graph."""
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Self
@@ -26,6 +27,7 @@ class CrawlResult(BaseModel):
     edges: list[Edge]
     failed: dict[str, str]
     contents: list[PageContent] = Field(default_factory=list)
+    duration: float = 0.0  # seconds the crawl took
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +46,7 @@ def crawl(
     Every link found on a visited page becomes an edge, including links that lead
     outside the scope. Only in-scope links within max_depth are visited.
     """
+    started = time.monotonic()
     frontier = Frontier(config.strategy)
     frontier.add(config.start_url, depth=0)
     pages: list[CrawledPage] = []
@@ -90,4 +93,11 @@ def crawl(
                 ):
                     frontier.add(link.url, depth + 1)
 
-    return CrawlResult(config=config, pages=pages, edges=edges, failed=failed, contents=contents)
+    return CrawlResult(
+        config=config,
+        pages=pages,
+        edges=edges,
+        failed=failed,
+        contents=contents,
+        duration=time.monotonic() - started,
+    )
