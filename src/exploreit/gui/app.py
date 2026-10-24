@@ -27,7 +27,7 @@ class ExploreApp:
 
     def __init__(self, root: tb.Window, data_dir: Path) -> None:
         self.root = root
-        self.data_dir = data_dir
+        self.output_dir = tk.StringVar(value=str(data_dir.resolve()))
         self.tasks = TaskRunner(root)
         self.status = tk.StringVar(value=f"Results are saved in {data_dir.resolve()}")
         self.dark = tk.BooleanVar(value=False)
@@ -85,6 +85,11 @@ class ExploreApp:
         size.pack(side="right")
         ttk.Label(bar, text="Text size").pack(side="right", padx=(0, 6))
 
+    @property
+    def data_dir(self) -> Path:
+        """The folder chosen on the Crawl tab, where every result is saved and looked for."""
+        return Path(self.output_dir.get().strip() or ".")
+
     def set_status(self, text: str) -> None:
         self.status.set(text)
 
@@ -119,7 +124,7 @@ class ExploreApp:
         self.results_tab.show(result, path)
         self.graph_tab.show(result, path)
         self.pages_tab.show(result)
-        self.content_tab.show(result)
+        self.content_tab.show(result, path)
         self.notebook.select(self.results_tab)
         self.set_status(f"{len(result.pages)} pages, {len(result.edges)} links · {path}")
 

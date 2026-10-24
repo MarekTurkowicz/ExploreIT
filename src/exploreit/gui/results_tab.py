@@ -18,6 +18,7 @@ from exploreit.export import write_gexf, write_html
 from exploreit.graph import click_tree, compute_stats, shortest_levels
 from exploreit.gui.widgets import ChartPanel, Table
 from exploreit.plots import levels_figure, out_links_figure, save_figure
+from exploreit.storage import write_csv, write_sqlite
 
 if TYPE_CHECKING:
     from exploreit.gui.app import ExploreApp
@@ -157,10 +158,28 @@ class PagesTab(ttk.Frame):
 class ContentTab(ttk.Frame):
     """Stored page content: a table of pages and the full text of the selected one."""
 
+    # Set by show(); the save buttons stay disabled until then.
+    result: CrawlResult
+    crawl_file: Path
+
     def __init__(self, master: tk.Misc, app: ExploreApp) -> None:
         super().__init__(master, padding=12)
         self.app = app
         self.bodies: dict[str, str] = {}
+
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill="x", pady=(0, 10))
+        self.save_buttons = [
+            ttk.Button(toolbar, text="Save CSV as…", command=self._choose_csv),
+            ttk.Button(toolbar, text="Save database (SQLite) as…", command=self._choose_sqlite),
+        ]
+        for button in self.save_buttons:
+            button.pack(side="left", padx=(0, 8))
+            button.state(["disabled"])
+        ttk.Label(toolbar, text="CSV uses the fields and separator chosen on the Crawl tab.").pack(
+            side="left", padx=8
+        )
+
         panes = ttk.PanedWindow(self, orient="vertical")
         panes.pack(fill="both", expand=True)
         self.table = Table(panes, on_select=self._show_details)
@@ -175,7 +194,10 @@ class ContentTab(ttk.Frame):
             background=colours.inputbg, foreground=colours.inputfg, font="TkTextFont"
         )
 
-    def show(self, result: CrawlResult) -> None:
+    def show(self, result: CrawlResult, path: Path) -> None:
+        self.result, self.crawl_file = result, path
+        for button in self.save_buttons:
+            button.state(["!disabled"] if result.contents else ["disabled"])
         self.bodies = {content.url: content.body for content in result.contents}
         self.table.set_rows(
             ["URL", "Title", "Description", "Keywords", "Body words"],
@@ -193,7 +215,45 @@ class ContentTab(ttk.Frame):
         )
         self.details.delete("1.0", "end")
         if not result.contents:
-            self.details.insert("end", "This crawl did not save page content.")
+            self.details.insert(
+                "end",
+                "This crawl did not save page content. Turn on 'Save page content' "
+                "on the Crawl tab and crawl again.",
+            )
+
+    def save_csv(self, path: Path) -> None:
+        crawl_tab = self.app.crawl_tab
+        write_csv(self.result.contents, path, crawl_tab.csv_fields(), crawl_tab.csv_separator())
+        self.app.set_status(f"Saved {len(self.result.contents)} pages to {path}")
+
+    def save_sqlite(self, path: Path) -> None:
+        write_sqlite(self.result, path)
+        self.app.set_status(f"Saved the database to {path}")
+
+    def _choose_csv(self) -> None:
+        if not self.app.crawl_tab.csv_fields():
+            messagebox.showerror("Save CSV", "Pick at least one CSV field on the Crawl tab.")
+            return
+        name = filedialog.asksaveasfilename(
+            title="Save page content as CSV",
+            initialdir=self.crawl_file.parent,
+            initialfile=self.crawl_file.with_suffix(".csv").name,
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+        )
+        if name:
+            self.save_csv(Path(name))
+
+    def _choose_sqlite(self) -> None:
+        name = filedialog.asksaveasfilename(
+            title="Save the crawl as a SQLite database",
+            initialdir=self.crawl_file.parent,
+            initialfile=self.crawl_file.with_suffix(".sqlite").name,
+            defaultextension=".sqlite",
+            filetypes=[("SQLite database", "*.sqlite *.db")],
+        )
+        if name:
+            self.save_sqlite(Path(name))
 
     def _show_details(self, row: tuple[str, ...]) -> None:
         if not row:

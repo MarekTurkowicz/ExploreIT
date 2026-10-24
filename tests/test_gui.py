@@ -269,3 +269,32 @@ def test_stop_button_ends_the_crawl_early(app: ExploreApp) -> None:
     assert len(app.pages_tab.table.rows()) < 4
     assert app.crawl_tab.stop_button.instate(["disabled"])
     assert app.crawl_tab.start_button.instate(["!disabled"])
+
+
+@pytest.mark.usefixtures("site")
+def test_results_go_to_the_chosen_folder(app: ExploreApp, tmp_path: Path) -> None:
+    fill_form(app)
+    app.output_dir.set(str(tmp_path / "chosen"))
+
+    app.crawl_tab.start()
+    settle(app)
+
+    assert len(list((tmp_path / "chosen").glob("crawl-*.json"))) == 1
+    assert app.data_dir == tmp_path / "chosen"
+
+
+def test_content_can_be_saved_anywhere(app: ExploreApp, tmp_path: Path) -> None:
+    crawl_file = tmp_path / "old.json"
+    save_crawl(crawl_file, ["a", "b"])
+    app.results_tab.open_file(crawl_file)
+    settle(app)
+    for field, ticked in app.crawl_tab.fields.items():
+        ticked.set(field in (ContentField.URL, ContentField.KEYWORDS))
+    app.crawl_tab.separator.set("semicolon ( ; )")
+
+    app.content_tab.save_csv(tmp_path / "export" / "keywords.csv")
+    app.content_tab.save_sqlite(tmp_path / "export" / "crawl.db")
+
+    lines = (tmp_path / "export" / "keywords.csv").read_text(encoding="utf-8-sig").splitlines()
+    assert lines == ["url;keywords", f"{SITE}/;a, b"]
+    assert (tmp_path / "export" / "crawl.db").stat().st_size > 0

@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import queue
 import threading
+import time
 import tkinter as tk
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
@@ -17,6 +18,7 @@ from matplotlib.figure import Figure
 from pydantic import ValidationError
 
 POLL_MS = 50
+COLLECT_EVERY_S = 2.0
 
 
 class TaskRunner:
@@ -24,6 +26,11 @@ class TaskRunner:
 
     Tk widgets may only be touched from the thread that created them, so a worker never
     updates the window itself: it queues calls that the Tk thread runs every POLL_MS.
+
+    Python's cyclic garbage collector runs in whichever thread happens to allocate memory.
+    If it frees an old Tk object (a replaced chart, a destroyed widget) from a worker,
+    Tk raises "main thread is not in main loop". So automatic collection is switched off
+    while the window is open and the Tk thread collects garbage itself every few seconds.
     """
 
     def __init__(self, root: tk.Misc) -> None:
@@ -31,6 +38,8 @@ class TaskRunner:
         self._calls: queue.Queue[Callable[[], object]] = queue.Queue()
         self._running = 0
         self._after = ""
+        self._collected = time.monotonic()
+        gc.disable()
         root.bind("<Destroy>", self._stop, add="+")
         self._poll()
 
@@ -69,11 +78,15 @@ class TaskRunner:
     def _poll(self) -> None:
         while not self._calls.empty():
             self._calls.get_nowait()()
+        if time.monotonic() - self._collected > COLLECT_EVERY_S:
+            gc.collect()
+            self._collected = time.monotonic()
         self._after = self._root.after(POLL_MS, self._poll)
 
     def _stop(self, event: tk.Event[tk.Misc]) -> None:
         if event.widget is self._root:  # children send <Destroy> too
             self._root.after_cancel(self._after)
+            gc.enable()
 
 
 class Table(ttk.Frame):

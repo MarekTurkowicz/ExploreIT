@@ -6,7 +6,7 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 from typing import TYPE_CHECKING
 
@@ -102,6 +102,14 @@ class CrawlTab(ttk.Frame):
         )
         self._add(robots).grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
 
+        ttk.Label(settings, text="Save results in").grid(row=4, column=0, sticky="w", pady=6)
+        self._add(ttk.Entry(settings, textvariable=self.app.output_dir)).grid(
+            row=4, column=1, columnspan=4, sticky="ew", pady=6
+        )
+        self._add(ttk.Button(settings, text="Browse…", command=self._choose_folder)).grid(
+            row=4, column=5, sticky="w", padx=(8, 0), pady=6
+        )
+
         content = ttk.LabelFrame(self, text="Page content (title, meta tags, body)", padding=12)
         content.pack(fill="x", pady=(10, 0))
         save = tb.Checkbutton(
@@ -145,6 +153,19 @@ class CrawlTab(ttk.Frame):
     def _add[W: ttk.Widget](self, widget: W) -> W:
         self.inputs.append(widget)
         return widget
+
+    def _choose_folder(self) -> None:
+        folder = filedialog.askdirectory(
+            title="Where to save crawl results", initialdir=self.app.data_dir, mustexist=False
+        )
+        if folder:
+            self.app.output_dir.set(folder)
+
+    def csv_fields(self) -> list[ContentField]:
+        return [field for field, ticked in self.fields.items() if ticked.get()]
+
+    def csv_separator(self) -> str:
+        return SEPARATORS[self.separator.get()]
 
     def apply_theme(self) -> None:
         colours = self.app.theme_colours()
@@ -198,12 +219,12 @@ class CrawlTab(ttk.Frame):
         except ValidationError as error:
             messagebox.showerror("Invalid settings", describe_errors(error))
             return
-        fields = [field for field, ticked in self.fields.items() if ticked.get()]
+        fields = self.csv_fields()
         if config.store_content and not fields:
             messagebox.showerror("Invalid settings", "Pick at least one CSV field.")
             return
 
-        separator = SEPARATORS[self.separator.get()]
+        separator = self.csv_separator()
         self.running = True
         self._stop_requested.clear()
         self.app.set_busy(True)
@@ -213,20 +234,21 @@ class CrawlTab(ttk.Frame):
         self._started, self._pages = time.monotonic(), 0
         self._tick()
         self.app.set_status(f"Crawling {config.start_url} …")
+        # Read the folder from the window now: the worker thread must not touch Tk.
+        path = self.app.data_dir / f"crawl-{timestamp()}.json"
         self.app.tasks.run(
-            lambda: self._crawl(config, fields, separator), self._finish, self._failed
+            lambda: self._crawl(config, fields, separator, path), self._finish, self._failed
         )
 
     def _crawl(
-        self, config: CrawlConfig, fields: list[ContentField], separator: str
+        self, config: CrawlConfig, fields: list[ContentField], separator: str, path: Path
     ) -> tuple[CrawlResult, Path]:
-        """Runs in a background thread."""
+        """Runs in a background thread, so it must not touch any Tk widget or variable."""
         result = crawl(
             config,
             on_page=lambda page: self.app.tasks.call(self._log_page, page),
             should_stop=self._stop_requested.is_set,
         )
-        path = self.app.data_dir / f"crawl-{timestamp()}.json"
         result.save(path)
         write_html(result, path.with_suffix(".html"))
         if result.contents:
