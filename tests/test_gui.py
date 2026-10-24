@@ -2,6 +2,7 @@ import time
 import tkinter as tk
 from collections.abc import Iterator
 from pathlib import Path
+from tkinter import ttk
 
 import pytest
 import respx
@@ -192,10 +193,15 @@ def test_settings_are_locked_while_crawling(app: ExploreApp) -> None:
 def test_theme_and_font_size(app: ExploreApp) -> None:
     app.dark.set(True)
     app.set_theme(DARK_THEME)
-    app.set_font_size(30)
+    app.set_font_size(40)
 
-    assert app.font_size.get() == 20  # clamped to the largest size
+    assert app.font_size.get() == 30  # clamped to the largest size
     assert app.root.style.theme_use() == DARK_THEME
+    colours = app.theme_colours()
+    assert app.root.style.lookup("TSpinbox", "fieldbackground") == colours.inputbg
+    combobox = next(w for w in app.crawl_tab.inputs if isinstance(w, ttk.Combobox))
+    popdown = combobox.tk.eval(f"ttk::combobox::PopdownWindow {combobox}")
+    assert combobox.tk.call(f"{popdown}.f.l", "cget", "-background") == colours.inputbg
 
 
 @pytest.mark.usefixtures("site")

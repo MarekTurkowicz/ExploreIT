@@ -20,6 +20,7 @@ from exploreit.gui.graph_model import (
 )
 
 MARGIN = 50
+LABEL_FONT = "ExploreITGraphLabel"  # a named font, sized by the app for page names
 ZOOM_STEP = 1.15
 DIM_MIX = 0.8  # how far faded items move towards the background colour
 
@@ -101,7 +102,7 @@ class GraphCanvas(tk.Canvas):
             self._node_items[url] = item
             self._items_to_url[item] = url
             label = self.create_text(
-                0, 0, anchor="w", text=short_label(url, start_url), tags="label"
+                0, 0, anchor="w", text=short_label(url, start_url), tags="label", font=LABEL_FONT
             )
             self._label_items[url] = label
             self._items_to_url[label] = url

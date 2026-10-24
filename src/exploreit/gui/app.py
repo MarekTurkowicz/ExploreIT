@@ -12,13 +12,15 @@ from exploreit.crawler import CrawlResult
 from exploreit.gui.compare_tab import CompareTab
 from exploreit.gui.crawl_tab import CrawlTab
 from exploreit.gui.experiments_tab import ExperimentsTab
+from exploreit.gui.graph_canvas import LABEL_FONT
 from exploreit.gui.graph_tab import GraphTab
 from exploreit.gui.results_tab import ContentTab, PagesTab, ResultsTab
 from exploreit.gui.widgets import TaskRunner
 
 LIGHT_THEME, DARK_THEME = "nord-light", "nord-dark"
-DEFAULT_FONT_SIZE = 12
-FONT_SIZES = range(9, 21)
+DEFAULT_FONT_SIZE = 18
+FONT_SIZES = range(10, 31)
+
 UI_FONTS = ["TkDefaultFont", "TkTextFont", "TkMenuFont", "TkCaptionFont", "TkTooltipFont"]
 
 
@@ -32,6 +34,7 @@ class ExploreApp:
         self.status = tk.StringVar(value=f"Results are saved in {data_dir.resolve()}")
         self.dark = tk.BooleanVar(value=False)
         self.font_size = tk.IntVar(value=DEFAULT_FONT_SIZE)
+        self._label_font = tkfont.Font(root=root, name=LABEL_FONT, exists=False)
         self.set_font_size(DEFAULT_FONT_SIZE)
 
         self.notebook = ttk.Notebook(root)
@@ -56,6 +59,7 @@ class ExploreApp:
             self.notebook.add(tab, text=title)
         self.notebook.bind("<<NotebookTabChanged>>", lambda _: self.compare_tab.refresh())
         self._build_status_bar()
+        self._style_inputs()
 
         root.bind("<Control-r>", lambda _: self.crawl_tab.start())
         root.bind("<Escape>", lambda _: self.crawl_tab.stop())
@@ -101,6 +105,7 @@ class ExploreApp:
     def set_theme(self, name: str) -> None:
         self.root.style.theme_use(name)
         self.set_font_size(self.font_size.get())  # a theme resets some widget fonts
+        self._style_inputs()
         self.crawl_tab.apply_theme()
         self.content_tab.apply_theme()
         self.graph_tab.restyle()
@@ -116,8 +121,47 @@ class ExploreApp:
             tkfont.nametofont(name).configure(size=size)
         tkfont.nametofont("TkHeadingFont").configure(size=size, weight="bold")
         tkfont.nametofont("TkFixedFont").configure(size=size - 1)
+        tkfont.nametofont(LABEL_FONT).configure(size=max(8, round(size * 0.6)))
         row_height = tkfont.nametofont("TkDefaultFont").metrics("linespace") + 10
         self.root.style.configure("Treeview", rowheight=row_height)
+        self.root.option_add("*TCombobox*Listbox.font", "TkDefaultFont")
+
+    def _style_inputs(self) -> None:
+        """Give text fields and drop-down lists the theme's colours.
+
+        ttkbootstrap leaves the spin box field and already opened drop-down lists in
+        the previous theme's colours, which turns them into light text on white after
+        switching to dark mode.
+        """
+        colours = self.theme_colours()
+        for style in ("TEntry", "TSpinbox", "TCombobox"):
+            self.root.style.configure(
+                style,
+                fieldbackground=colours.inputbg,
+                foreground=colours.inputfg,
+                insertcolor=colours.inputfg,
+            )
+        lists = {
+            "background": colours.inputbg,
+            "foreground": colours.inputfg,
+            "selectBackground": colours.selectbg,
+            "selectForeground": colours.selectfg,
+        }
+        for option, value in lists.items():
+            self.root.option_add(f"*TCombobox*Listbox.{option}", value)
+        for combobox in _all_widgets(self.root, ttk.Combobox):
+            popdown = combobox.tk.eval(f"ttk::combobox::PopdownWindow {combobox}")
+            combobox.tk.call(
+                f"{popdown}.f.l",
+                "configure",
+                *(
+                    item
+                    for option, value in lists.items()
+                    for item in (f"-{option.lower()}", value)
+                ),
+                "-font",
+                "TkDefaultFont",
+            )
 
     def show_crawl(self, result: CrawlResult, path: Path) -> None:
         """Show a crawl, fresh or opened from disk, in every tab that describes it."""
@@ -127,6 +171,15 @@ class ExploreApp:
         self.content_tab.show(result, path)
         self.notebook.select(self.results_tab)
         self.set_status(f"{len(result.pages)} pages, {len(result.edges)} links · {path}")
+
+
+def _all_widgets[W: tk.Misc](parent: tk.Misc, kind: type[W]) -> list[W]:
+    found: list[W] = []
+    for child in parent.winfo_children():
+        if isinstance(child, kind):
+            found.append(child)
+        found += _all_widgets(child, kind)
+    return found
 
 
 def create_window(data_dir: Path = Path("data")) -> tuple[tb.Window, ExploreApp]:
