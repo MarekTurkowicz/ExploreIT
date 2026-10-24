@@ -32,10 +32,13 @@ class ResultsPane(Horizontal):
     ResultsPane Tree { border-left: solid $panel; }
     """
 
+    # Set by show(); the buttons that use them stay disabled until then.
+    result: CrawlResult
+    crawl_file: Path
+
     def __init__(self, data_dir: Path) -> None:
         super().__init__()
         self.data_dir = data_dir
-        self.crawl_file = Path()
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="summary"):
@@ -66,6 +69,7 @@ class ResultsPane(Horizontal):
         self.post_message(CrawlLoaded(result, path))
 
     def show(self, result: CrawlResult, path: Path) -> None:
+        self.result = result
         self.crawl_file = path
         stats = compute_stats(result)
 
@@ -81,8 +85,8 @@ class ResultsPane(Horizontal):
         ]
         self.query_one("#levels", Static).update("[b]Pages per level[/]\n" + "\n".join(bars))
         self._fill_tree(result)
-        for button in self.query(".row Button"):
-            button.disabled = False
+        self.query_one("#open-graph", Button).disabled = False
+        self.query_one("#save-charts", Button).disabled = False
 
     def _fill_tree(self, result: CrawlResult) -> None:
         tree: Tree[None] = self.query_one(Tree)
@@ -107,16 +111,15 @@ class ResultsPane(Horizontal):
     def _open_graph(self) -> None:
         html_file = self.crawl_file.with_suffix(".html")
         if not html_file.exists():
-            write_html(CrawlResult.load(self.crawl_file), html_file)
+            write_html(self.result, html_file)
         webbrowser.open(html_file.resolve().as_uri())
 
     @on(Button.Pressed, "#save-charts")
     def _save_charts(self) -> None:
-        result = CrawlResult.load(self.crawl_file)
         paths = []
         for suffix, plot in (("levels", plot_levels), ("out-links", plot_out_links)):
             path = self.crawl_file.with_name(f"{self.crawl_file.stem}-{suffix}.png")
-            plot(result, path)
+            plot(self.result, path)
             paths.append(path.name)
         self.notify(", ".join(paths), title="Charts saved")
 

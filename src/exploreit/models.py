@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+HTML_TYPES = frozenset({"text/html", "application/xhtml+xml"})
+
 
 class LinkKind(StrEnum):
     """The kind of HTML element a link was found in."""
@@ -42,6 +44,11 @@ class CrawledPage(BaseModel):
     depth: int
     status_code: int
     content_type: str
+
+    @property
+    def is_html(self) -> bool:
+        """True for a successful HTML response, the only kind whose links are followed."""
+        return self.content_type in HTML_TYPES and 200 <= self.status_code < 300
 
 
 class Edge(BaseModel):

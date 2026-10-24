@@ -58,13 +58,8 @@ def write_csv(
         writer = csv.writer(file, delimiter=separator)
         writer.writerow(fields)
         for content in contents:
-            writer.writerow(_field_value(content, field) for field in fields)
-
-
-def read_csv(path: Path, separator: str = ",") -> list[dict[str, str]]:
-    """Read a CSV written by write_csv back as one dict per row."""
-    with path.open(newline="", encoding="utf-8-sig") as file:
-        return list(csv.DictReader(file, delimiter=separator))
+            values = content.model_dump() | {"keywords": KEYWORD_SEPARATOR.join(content.keywords)}
+            writer.writerow(values[field] for field in fields)
 
 
 def write_sqlite(result: CrawlResult, path: Path) -> None:
@@ -91,10 +86,3 @@ def write_sqlite(result: CrawlResult, path: Path) -> None:
             "INSERT INTO links VALUES (?, ?, ?)",
             ((e.source, e.target, e.kind.value) for e in result.edges),
         )
-
-
-def _field_value(content: PageContent, field: ContentField) -> str:
-    if field is ContentField.KEYWORDS:
-        return KEYWORD_SEPARATOR.join(content.keywords)
-    value: str = getattr(content, field.value)
-    return value

@@ -114,6 +114,9 @@ class CrawlPane(Horizontal):
 
     @on(Button.Pressed, "#start")
     def start_crawl(self) -> None:
+        start = self.query_one("#start", Button)
+        if start.disabled:
+            return  # a crawl is already running
         form = self.query_one(CrawlForm)
         try:
             config = form.read_config()
@@ -125,7 +128,7 @@ class CrawlPane(Horizontal):
             self.notify("Pick at least one CSV field.", severity="error")
             return
 
-        self.query_one("#start", Button).disabled = True
+        start.disabled = True
         self.query_one(RichLog).clear()
         self.query_one(ProgressBar).update(total=config.max_pages, progress=0)
         self._crawl(config, fields, form.csv_separator())

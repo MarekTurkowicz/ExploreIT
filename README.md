@@ -42,7 +42,7 @@ exploreit plots data/crawl.json                 # PNG charts: pages per level, l
 
 # Every strategy × scope × link mode combination, a CSV summary and a comparison chart
 exploreit experiment https://example.com --max-pages 50 -o data/experiments
-exploreit compare data/experiments
+exploreit summarize data/experiments
 
 # Page content: title, meta description, meta keywords and body text
 exploreit crawl https://example.com --scope web --max-depth 2 --content -o data/a.json

@@ -61,6 +61,12 @@ def crawl(
             except FetchError as error:
                 failed[url] = str(error)
                 continue
+            if depth == 0 and page.url != url:
+                # The start page redirected, e.g. http://site to https://www.site/.
+                # Crawl from where the site really is, so the scope check matches its links.
+                url = page.url
+                config = config.model_copy(update={"start_url": url})
+                frontier.mark_seen(url)
 
             crawled = CrawledPage(
                 url=url,
@@ -76,6 +82,8 @@ def crawl(
             if config.store_content:
                 contents.append(extract_content(page.html, url))
             for link in extract_links(page.html, page.url, config.link_mode):
+                if link.url in (url, page.url):
+                    continue  # a link to the page itself, e.g. "#top", is not an edge
                 edges.append(Edge(source=url, target=link.url, kind=link.kind))
                 if depth < config.max_depth and is_in_scope(
                     link.url, config.start_url, config.scope

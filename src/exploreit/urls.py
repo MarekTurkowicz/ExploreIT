@@ -14,15 +14,6 @@ class Scope(StrEnum):
     WEB = "web"
 
 
-def is_crawlable(url: str) -> bool:
-    """Return True if the URL is a valid absolute http(s) URL with a host."""
-    try:
-        normalize_url(url)
-    except ValueError:
-        return False
-    return True
-
-
 def normalize_url(url: str, base: str = "") -> str:
     """Resolve a URL against a base and return it in canonical form.
 

@@ -28,7 +28,7 @@ def test_crawl_command_saves_result(respx_mock: respx.MockRouter, tmp_path: Path
     result = runner.invoke(app, [*args, "--ignore-robots", "-o", str(output)])
 
     assert result.exit_code == 0, result.output
-    assert "Crawl summary" in result.output
+    assert "Graph depth" in result.output
     saved = CrawlResult.load(output)
     assert [page.url for page in saved.pages] == [
         "https://example.com/",
@@ -109,11 +109,11 @@ def test_experiment_command_compares_crawls(respx_mock: respx.MockRouter, tmp_pa
     result = runner.invoke(app, [*args, "-o", str(tmp_path)])
 
     assert result.exit_code == 0, result.output
-    assert "2/2 dfs-server-hyperlinks" in result.output
+    assert "dfs-server-hyperlinks: 2 pages" in result.output
     assert (tmp_path / "summary.csv").read_text().count("\n") == 3
     assert (tmp_path / "comparison.png").exists()
 
-    rerun = runner.invoke(app, ["compare", str(tmp_path)])
+    rerun = runner.invoke(app, ["summarize", str(tmp_path)])
     assert rerun.exit_code == 0, rerun.output
 
 
@@ -158,3 +158,22 @@ def test_store_command_needs_content(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "--content" in result.output
+
+
+def test_summarize_empty_directory(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["summarize", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "no crawl results" in result.output
+
+
+def test_store_rejects_long_separator(tmp_path: Path) -> None:
+    crawl_file = tmp_path / "crawl.json"
+    CrawlResult(
+        config=CrawlConfig(start_url="https://example.com/"), pages=[], edges=[], failed={}
+    ).save(crawl_file)
+
+    result = runner.invoke(app, ["store", str(crawl_file), "--separator", ";;"])
+
+    assert result.exit_code == 2
+    assert "single character" in result.output

@@ -10,7 +10,6 @@ from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
-from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
 from exploreit.plots import plot_comparison
 from exploreit.urls import Scope
@@ -60,12 +59,11 @@ def run_experiments(
     configs: list[CrawlConfig],
     out_dir: Path,
     on_crawl: Callable[[CrawlConfig, CrawlResult], object] = lambda *_: None,
-    on_page: Callable[[CrawledPage], object] = lambda _: None,
 ) -> list[CrawlResult]:
     """Run every crawl and save each result as `<strategy>-<scope>-<link_mode>.json`."""
     results = []
     for config in configs:
-        result = crawl(config, on_page=on_page)
+        result = crawl(config)
         result.save(out_dir / f"{experiment_name(config)}.json")
         on_crawl(config, result)
         results.append(result)
@@ -90,8 +88,14 @@ def comparison_table(results: Iterable[CrawlResult]) -> pd.DataFrame:
 
 
 def save_comparison(results: Iterable[CrawlResult], directory: Path) -> pd.DataFrame:
-    """Build the comparison table and save it as CSV and as a chart in the directory."""
+    """Build the comparison table and save it as CSV and as a chart in the directory.
+
+    Raises:
+        ValueError: If there are no results to compare.
+    """
     table = comparison_table(results)
+    if table.empty:
+        raise ValueError(f"no crawl results in {directory}")
     directory.mkdir(parents=True, exist_ok=True)
     table.to_csv(directory / SUMMARY_FILE, index=False)
     plot_comparison(table, directory / CHART_FILE)

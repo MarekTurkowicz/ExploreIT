@@ -7,8 +7,6 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel
 
 from exploreit.crawler import CrawlResult
-from exploreit.fetcher import HTML_TYPES
-from exploreit.models import CrawledPage
 
 
 class GraphStats(BaseModel):
@@ -62,7 +60,7 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
     """
     start = result.config.start_url
     visited = {page.url for page in result.pages}
-    html = [page for page in result.pages if _is_html(page)]
+    html = [page for page in result.pages if page.is_html]
     out_degree = Counter(edge.source for edge in result.edges)
     in_degree = Counter(edge.target for edge in result.edges)
 
@@ -125,7 +123,3 @@ def shortest_levels(result: CrawlResult) -> dict[str, int]:
         for child in children:
             levels[child] = level + 1
     return levels
-
-
-def _is_html(page: CrawledPage) -> bool:
-    return page.content_type in HTML_TYPES and 200 <= page.status_code < 300

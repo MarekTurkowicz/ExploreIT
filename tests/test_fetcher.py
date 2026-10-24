@@ -122,3 +122,19 @@ def test_waits_between_requests_to_the_same_host(
 
     assert len(sleeps) == 1
     assert 4 < sleeps[0] <= 5
+
+
+def test_charset_from_meta_tag_when_header_has_none(
+    respx_mock: respx.MockRouter, fetcher: Fetcher
+) -> None:
+    html = '<meta charset="windows-1250"><p>Zażółć gęślą jaźń</p>'
+    respx_mock.get(PAGE).respond(
+        content=html.encode("cp1250"), headers={"Content-Type": "text/html"}
+    )
+
+    assert "Zażółć gęślą jaźń" in fetcher.fetch(PAGE).html
+
+
+def test_invalid_url_raises_fetch_error(fetcher: Fetcher) -> None:
+    with pytest.raises(FetchError, match="cannot fetch"):
+        fetcher.fetch("https://exa mple.com/")

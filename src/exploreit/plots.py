@@ -47,7 +47,7 @@ def plot_levels(result: CrawlResult, path: Path) -> None:
 def plot_out_links(result: CrawlResult, path: Path) -> None:
     """Histogram of the number of outgoing links on visited HTML pages."""
     out_links = Counter(edge.source for edge in result.edges)
-    counts = [out_links[page.url] for page in result.pages if page.content_type == "text/html"]
+    counts = [out_links[page.url] for page in result.pages if page.is_html]
     figure, ax = _figure(width=6, height=3.6)
     ax.hist(counts, bins=min(20, max(1, len(set(counts)))), color=SERIES[0], edgecolor=SURFACE)
     _style(ax, grid_axis="y")

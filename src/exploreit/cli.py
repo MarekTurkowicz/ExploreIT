@@ -1,6 +1,7 @@
 """Command-line interface."""
 
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
@@ -11,7 +12,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from exploreit import __version__
-from exploreit.compare import comparison_rows, crawl_label
+from exploreit.compare import comparison_rows
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.experiments import (
@@ -27,7 +28,7 @@ from exploreit.experiments import (
 )
 from exploreit.export import write_gexf, write_html
 from exploreit.frontier import Strategy
-from exploreit.graph import GraphStats, compute_stats
+from exploreit.graph import compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
 from exploreit.plots import plot_levels, plot_out_links
@@ -37,6 +38,15 @@ from exploreit.urls import Scope
 
 app = typer.Typer(help="ExploreIT: web structure exploration toolkit.", no_args_is_help=True)
 console = Console()
+
+# Options shared by `crawl` and `experiment`.
+MaxDepth = Annotated[int, typer.Option(help="Deepest level to visit (0 = start page only).")]
+MaxPages = Annotated[int, typer.Option(help="Stop a crawl after this many pages.")]
+Delay = Annotated[float, typer.Option(help="Seconds between requests to the same host.")]
+IgnoreRobots = Annotated[bool, typer.Option("--ignore-robots", help="Do not check robots.txt.")]
+CrawlFile = Annotated[
+    Path, typer.Argument(exists=True, dir_okay=False, help="A crawl result (JSON).")
+]
 
 
 @app.callback()
@@ -62,12 +72,10 @@ def crawl_command(
     strategy: Annotated[Strategy, typer.Option(help="Order of visiting pages.")] = Strategy.BFS,
     scope: Annotated[Scope, typer.Option(help="How far from the start URL to go.")] = Scope.SERVER,
     links: Annotated[LinkMode, typer.Option(help="Which links to follow.")] = LinkMode.HYPERLINKS,
-    max_depth: Annotated[int, typer.Option(help="Deepest level to visit.")] = 3,
-    max_pages: Annotated[int, typer.Option(help="Stop after this many pages.")] = 100,
-    delay: Annotated[float, typer.Option(help="Seconds between requests to a host.")] = 1.0,
-    ignore_robots: Annotated[
-        bool, typer.Option("--ignore-robots", help="Do not check robots.txt.")
-    ] = False,
+    max_depth: MaxDepth = 3,
+    max_pages: MaxPages = 100,
+    delay: Delay = 1.0,
+    ignore_robots: IgnoreRobots = False,
     content: Annotated[
         bool, typer.Option("--content", help="Also keep title, meta tags and body text.")
     ] = False,
@@ -76,8 +84,8 @@ def crawl_command(
     ] = Path("data/crawl.json"),
 ) -> None:
     """Crawl a website and save its link graph (and optionally page content) as JSON."""
-    try:
-        config = CrawlConfig(
+    config = _validated(
+        lambda: CrawlConfig(
             start_url=start_url,
             strategy=strategy,
             scope=scope,
@@ -88,31 +96,24 @@ def crawl_command(
             respect_robots=not ignore_robots,
             store_content=content,
         )
-    except ValidationError as error:
-        _print_errors(error)
-        raise typer.Exit(code=2) from error
-
+    )
     result = crawl(config, on_page=_print_page)
+    for url, reason in result.failed.items():
+        console.print(f"[red]failed[/] {escape(url)}: {escape(reason)}", soft_wrap=True)
     result.save(output)
-    console.print(_summary(result, output))
+    console.print(_stats_table(result))
+    console.print(f"Saved to {output}")
 
 
 @app.command()
-def stats(
-    crawl_file: Annotated[
-        Path, typer.Argument(exists=True, dir_okay=False, help="Result of the crawl command.")
-    ] = Path("data/crawl.json"),
-) -> None:
+def stats(crawl_file: CrawlFile = Path("data/crawl.json")) -> None:
     """Show the structure of a crawled link graph."""
-    result = CrawlResult.load(crawl_file)
-    console.print(_stats_table(compute_stats(result), result.config))
+    console.print(_stats_table(CrawlResult.load(crawl_file)))
 
 
 @app.command()
 def graph(
-    crawl_file: Annotated[
-        Path, typer.Argument(exists=True, dir_okay=False, help="Result of the crawl command.")
-    ] = Path("data/crawl.json"),
+    crawl_file: CrawlFile = Path("data/crawl.json"),
     all_links: Annotated[
         bool, typer.Option("--all-links", help="Also show linked pages that were not visited.")
     ] = False,
@@ -135,11 +136,7 @@ def graph(
 
 
 @app.command()
-def plots(
-    crawl_file: Annotated[
-        Path, typer.Argument(exists=True, dir_okay=False, help="Result of the crawl command.")
-    ] = Path("data/crawl.json"),
-) -> None:
+def plots(crawl_file: CrawlFile = Path("data/crawl.json")) -> None:
     """Save PNG charts of a crawl next to the crawl file."""
     result = CrawlResult.load(crawl_file)
     for suffix, plot in (("levels", plot_levels), ("out-links", plot_out_links)):
@@ -178,22 +175,20 @@ def experiment(
             help="Link modes to try.",
         ),
     ],
-    max_depth: Annotated[int, typer.Option(help="Deepest level to visit.")] = 3,
-    max_pages: Annotated[int, typer.Option(help="Stop each crawl after this many pages.")] = 100,
-    delay: Annotated[float, typer.Option(help="Seconds between requests to a host.")] = 1.0,
-    ignore_robots: Annotated[
-        bool, typer.Option("--ignore-robots", help="Do not check robots.txt.")
-    ] = False,
-    output: Annotated[Path, typer.Option("--output", "-o", help="Directory for results.")] = Path(
-        "data/experiments"
-    ),
+    max_depth: MaxDepth = 3,
+    max_pages: MaxPages = 100,
+    delay: Delay = 1.0,
+    ignore_robots: IgnoreRobots = False,
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Directory for the results.")
+    ] = Path("data/experiments"),
 ) -> None:
     """Crawl a site with every parameter combination and compare the link graphs.
 
     Each option can be repeated to pick a subset, e.g. --scope server --scope web.
     """
-    try:
-        configs = experiment_configs(
+    configs = _validated(
+        lambda: experiment_configs(
             start_url,
             strategies,
             scopes,
@@ -203,19 +198,11 @@ def experiment(
             delay=delay,
             respect_robots=not ignore_robots,
         )
-    except ValidationError as error:
-        _print_errors(error)
-        raise typer.Exit(code=2) from error
-
-    total = len(configs)
-    done = 0
+    )
 
     def report(config: CrawlConfig, result: CrawlResult) -> None:
-        nonlocal done
-        done += 1
         console.print(
-            f"[dim]{done}/{total}[/] {experiment_name(config)}: "
-            f"{len(result.pages)} pages, {len(result.edges)} links"
+            f"{experiment_name(config)}: {len(result.pages)} pages, {len(result.edges)} links"
         )
 
     run_experiments(configs, output, on_crawl=report)
@@ -223,20 +210,18 @@ def experiment(
 
 
 @app.command()
-def compare(
+def summarize(
     directory: Annotated[
         Path, typer.Argument(exists=True, file_okay=False, help="Directory of crawl results.")
     ] = Path("data/experiments"),
 ) -> None:
-    """Compare saved crawl results and draw a comparison chart."""
+    """Compare the link graphs of saved crawls, e.g. the results of `experiment`."""
     _print_comparison(directory)
 
 
 @app.command()
 def store(
-    crawl_file: Annotated[
-        Path, typer.Argument(exists=True, dir_okay=False, help="Result of crawl --content.")
-    ],
+    crawl_file: CrawlFile,
     fields: Annotated[
         list[ContentField],
         typer.Option(
@@ -246,17 +231,22 @@ def store(
             help="Columns to save, in order. Repeat to pick several.",
         ),
     ],
-    separator: Annotated[str, typer.Option(help="CSV column separator, e.g. ';' or tab.")] = ",",
+    separator: Annotated[
+        str, typer.Option(help="One-character CSV separator, e.g. ';'. Use '\\t' for tab.")
+    ] = ",",
     sqlite: Annotated[bool, typer.Option("--sqlite", help="Also save a SQLite database.")] = False,
 ) -> None:
     """Save page content of a crawl as CSV (and SQLite) next to the crawl file."""
+    separator = separator.replace("\\t", "\t")
+    if len(separator) != 1:
+        raise typer.BadParameter("must be a single character", param_hint="--separator")
     result = CrawlResult.load(crawl_file)
     if not result.contents:
         console.print("[red]No page content in this crawl.[/] Run crawl with --content first.")
         raise typer.Exit(code=1)
 
     csv_file = crawl_file.with_suffix(".csv")
-    write_csv(result.contents, csv_file, fields, separator.replace("\\t", "\t"))
+    write_csv(result.contents, csv_file, fields, separator)
     console.print(f"{len(result.contents)} pages saved to {csv_file}")
     if sqlite:
         sqlite_file = crawl_file.with_suffix(".sqlite")
@@ -265,23 +255,42 @@ def store(
 
 
 @app.command()
-def diff(
-    first: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="First crawl.")],
-    second: Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Second crawl.")],
-) -> None:
+def diff(first: CrawlFile, second: CrawlFile) -> None:
     """Compare the page content stored by two crawls."""
-    rows = comparison_rows(CrawlResult.load(first), CrawlResult.load(second))
     table = Table(title="Content databases compared")
     table.add_column("")
-    for path in (first, second):
-        table.add_column(path.stem, overflow="fold")
-    for label, first_value, second_value in rows:
-        table.add_row(label, escape(first_value), escape(second_value))
+    table.add_column(first.stem, overflow="fold")
+    table.add_column(second.stem, overflow="fold")
+    for row in comparison_rows(CrawlResult.load(first), CrawlResult.load(second)):
+        table.add_row(*map(escape, row))
     console.print(table)
 
 
+def _validated[T](build: Callable[[], T]) -> T:
+    """Build a config, turning validation errors into readable messages and exit code 2."""
+    try:
+        return build()
+    except ValidationError as error:
+        for problem in error.errors():
+            field = ".".join(str(part) for part in problem["loc"])
+            console.print(f"[red]Invalid {field}:[/] {escape(problem['msg'])}")
+        raise typer.Exit(code=2) from error
+
+
+def _print_page(page: CrawledPage) -> None:
+    colour = "green" if page.status_code < 400 else "red"
+    console.print(
+        f"[dim]{page.depth}[/] [{colour}]{page.status_code}[/] {escape(page.url)}", soft_wrap=True
+    )
+
+
 def _print_comparison(directory: Path) -> None:
-    table = save_comparison(load_results(directory), directory)
+    try:
+        table = save_comparison(load_results(directory), directory)
+    except ValueError as error:
+        console.print(f"[red]{error}[/]")
+        raise typer.Exit(code=1) from error
+
     view = Table(title="Crawl parameters compared")
     for column in SUMMARY_COLUMNS:
         view.add_column(
@@ -293,33 +302,10 @@ def _print_comparison(directory: Path) -> None:
     console.print(f"Saved {directory / SUMMARY_FILE} and {directory / CHART_FILE}")
 
 
-def _print_errors(error: ValidationError) -> None:
-    for problem in error.errors():
-        field = ".".join(str(part) for part in problem["loc"])
-        console.print(f"[red]Invalid {field}:[/] {escape(problem['msg'])}")
-
-
-def _print_page(page: CrawledPage) -> None:
-    colour = "green" if page.status_code < 400 else "red"
-    console.print(
-        f"[dim]{page.depth}[/] [{colour}]{page.status_code}[/] {escape(page.url)}", soft_wrap=True
-    )
-
-
-def _summary(result: CrawlResult, output: Path) -> Table:
-    table = Table(title="Crawl summary", show_header=False)
-    table.add_row("Pages visited", str(len(result.pages)))
-    table.add_row("Links found", str(len(result.edges)))
-    table.add_row("Failed", str(len(result.failed)))
-    table.add_row("Deepest level", str(max((page.depth for page in result.pages), default=0)))
-    table.add_row("Saved to", str(output))
-    return table
-
-
-def _stats_table(stats: GraphStats, config: CrawlConfig) -> Table:
-    table = Table(title=f"Link graph of {escape(config.start_url)}", show_header=False)
-    table.add_row("Crawl", crawl_label(config))
+def _stats_table(result: CrawlResult) -> Table:
+    table = Table(title=f"Link graph of {escape(result.config.start_url)}", show_header=False)
+    table.add_row("Crawl", result.config.describe())
     table.add_section()
-    for label, value in stats.summary():
+    for label, value in compute_stats(result).summary():
         table.add_row(label, escape(value))
     return table

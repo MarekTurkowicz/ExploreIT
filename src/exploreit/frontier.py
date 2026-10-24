@@ -27,6 +27,10 @@ class Frontier:
         self._pending.append((url, depth))
         return True
 
+    def mark_seen(self, url: str) -> None:
+        """Make sure a URL is never scheduled, e.g. one already visited through a redirect."""
+        self._seen.add(url)
+
     def pop(self) -> tuple[str, int]:
         """Remove and return the next (url, depth) pair.
 

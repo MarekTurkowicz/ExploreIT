@@ -137,3 +137,23 @@ def test_content_is_stored_only_when_asked() -> None:
 
     assert [content.url for content in contents] == [page.url for page in run().pages]
     assert contents[3].body == "Leaf"
+
+
+def test_redirected_start_page_becomes_the_start() -> None:
+    with respx.mock() as router:
+        router.get("http://example.com/").respond(
+            301, headers={"Location": "https://www.example.com/"}
+        )
+        router.get("https://www.example.com/").respond(
+            html='<a href="/a">A</a> <a href="#top">Top</a> <a href="https://www.example.com/">Home</a>'
+        )
+        router.get("https://www.example.com/a").respond(html="<p>A</p>")
+
+        result = crawl(CrawlConfig(start_url="http://example.com", delay=0, respect_robots=False))
+
+    assert result.config.start_url == "https://www.example.com/"
+    assert [page.url for page in result.pages] == [
+        "https://www.example.com/",
+        "https://www.example.com/a",
+    ]
+    assert [edge.target for edge in result.edges] == ["https://www.example.com/a"]

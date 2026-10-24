@@ -8,13 +8,13 @@ from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
+from bs4 import UnicodeDammit
 
 from exploreit import __version__
-from exploreit.models import Page
+from exploreit.models import HTML_TYPES, Page
 from exploreit.urls import normalize_url
 
 USER_AGENT = f"ExploreIT/{__version__}"
-HTML_TYPES = frozenset({"text/html", "application/xhtml+xml"})
 ALLOW_ALL: list[str] = []
 DISALLOW_ALL = ["User-agent: *", "Disallow: /"]
 
@@ -73,8 +73,8 @@ class Fetcher:
                 html = ""
                 if response.is_success and content_type in HTML_TYPES:
                     response.read()
-                    html = response.text
-        except httpx.HTTPError as error:
+                    html = _decode(response)
+        except (httpx.HTTPError, httpx.InvalidURL) as error:
             raise FetchError(f"cannot fetch {url}: {error}") from error
 
         return Page(
@@ -100,7 +100,7 @@ class Fetcher:
         self._wait(origin)
         try:
             response = self._client.get(f"{origin}/robots.txt")
-        except httpx.HTTPError:
+        except (httpx.HTTPError, httpx.InvalidURL):
             rules = ALLOW_ALL
         else:
             if response.status_code in (401, 403):
@@ -121,6 +121,13 @@ class Fetcher:
         if elapsed < self.delay:
             time.sleep(self.delay - elapsed)
         self._last_request[host] = time.monotonic()
+
+
+def _decode(response: httpx.Response) -> str:
+    """Decode an HTML body using the charset from the header, else from <meta charset>."""
+    if response.charset_encoding:
+        return response.text
+    return UnicodeDammit(response.content, is_html=True).unicode_markup or ""
 
 
 def _media_type(content_type: str) -> str:

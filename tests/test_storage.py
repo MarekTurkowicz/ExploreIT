@@ -1,3 +1,4 @@
+import csv
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -5,7 +6,7 @@ from pathlib import Path
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
-from exploreit.storage import ContentField, read_csv, write_csv, write_sqlite
+from exploreit.storage import ContentField, write_csv, write_sqlite
 
 START = "https://example.com/"
 CONTENTS = [
@@ -19,7 +20,8 @@ def test_csv_round_trip_with_all_fields(tmp_path: Path) -> None:
 
     write_csv(CONTENTS, path)
 
-    rows = read_csv(path)
+    with path.open(newline="", encoding="utf-8-sig") as file:
+        rows = list(csv.DictReader(file))
     assert list(rows[0]) == ["url", "title", "description", "keywords", "body"]
     assert rows[0]["keywords"] == "a, b"
     assert rows[0]["body"] == 'Says "hi", twice'

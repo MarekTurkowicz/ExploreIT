@@ -1,29 +1,10 @@
 import pytest
 
-from exploreit.urls import Scope, is_crawlable, is_in_scope, normalize_url
+from exploreit.urls import Scope, is_in_scope, normalize_url
 
 
 def test_scope_from_string() -> None:
     assert Scope("server") is Scope.SERVER
-
-
-@pytest.mark.parametrize(
-    ("url", "expected"),
-    [
-        ("https://example.com", True),
-        ("HTTP://EXAMPLE.COM/page", True),
-        ("mailto:john@example.com", False),
-        ("javascript:void(0)", False),
-        ("tel:+48123456789", False),
-        ("ftp://example.com/file.txt", False),
-        ("/relative/path", False),
-        ("https://", False),
-        ("http://example.com:abc/", False),
-        ("http://[::1", False),
-    ],
-)
-def test_is_crawlable(url: str, expected: bool) -> None:
-    assert is_crawlable(url) is expected
 
 
 @pytest.mark.parametrize(
@@ -49,7 +30,17 @@ def test_normalize_url_is_idempotent() -> None:
     assert normalize_url(url) == url
 
 
-@pytest.mark.parametrize("url", ["mailto:john@example.com", "javascript:void(0)", "https://"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "mailto:john@example.com",
+        "javascript:void(0)",
+        "tel:+48123456789",
+        "ftp://example.com/file.txt",
+        "/relative/path",
+        "https://",
+    ],
+)
 def test_normalize_url_rejects_non_http(url: str) -> None:
     with pytest.raises(ValueError, match="not an http"):
         normalize_url(url)

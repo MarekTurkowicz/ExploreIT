@@ -13,10 +13,11 @@ from pyvis.network import Network
 from exploreit.crawler import CrawlResult
 from exploreit.graph import shortest_levels
 
-LEVEL_COLOURS = ["#e4572e", "#f3a712", "#29335c", "#669bbc", "#a8c686", "#8e7dbe"]
-ERROR_COLOUR = "#d00000"
-UNVISITED_COLOUR = "#c0c0c0"
-EDGE_COLOURS = {"anchor": "#9aa5b1", "image": "#2a9d8f", "resource": "#e9c46a"}
+# Levels are ordered, so they use one hue from dark (start page) to light (deepest).
+LEVEL_COLOURS = ["#0d366b", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4"]
+ERROR_COLOUR = "#d03b3b"
+UNVISITED_COLOUR = "#c3c2b7"
+EDGE_COLOURS = {"anchor": "#898781", "image": "#1baf7a", "resource": "#eda100"}
 
 
 def build_graph(result: CrawlResult, visited_only: bool = True) -> nx.DiGraph[str]:

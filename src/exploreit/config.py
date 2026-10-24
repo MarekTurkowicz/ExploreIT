@@ -23,6 +23,10 @@ class CrawlConfig(BaseModel):
     respect_robots: bool = True
     store_content: bool = False
 
+    def describe(self) -> str:
+        """One-line summary of the parameters, e.g. "bfs · server · hyperlinks · depth 3"."""
+        return f"{self.strategy} · {self.scope} · {self.link_mode} · depth {self.max_depth}"
+
     @field_validator("start_url")
     @classmethod
     def _normalize_start_url(cls, url: str) -> str:
