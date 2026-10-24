@@ -28,6 +28,7 @@ class CrawlResult(BaseModel):
     failed: dict[str, str]
     contents: list[PageContent] = Field(default_factory=list)
     duration: float = 0.0  # seconds the crawl took
+    stopped: bool = False  # True if the user stopped the crawl before it finished
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,12 +40,16 @@ class CrawlResult(BaseModel):
 
 
 def crawl(
-    config: CrawlConfig, on_page: Callable[[CrawledPage], object] = lambda _: None
+    config: CrawlConfig,
+    on_page: Callable[[CrawledPage], object] = lambda _: None,
+    should_stop: Callable[[], bool] = lambda: False,
 ) -> CrawlResult:
     """Crawl from the start URL until the frontier is empty or max_pages is reached.
 
     Every link found on a visited page becomes an edge, including links that lead
     outside the scope. Only in-scope links within max_depth are visited.
+    `should_stop` is checked before every page; when it returns True the crawl ends
+    early and returns what it has collected so far.
     """
     started = time.monotonic()
     frontier = Frontier(config.strategy)
@@ -53,11 +58,15 @@ def crawl(
     edges: list[Edge] = []
     failed: dict[str, str] = {}
     contents: list[PageContent] = []
+    stopped = False
 
     with Fetcher(
         delay=config.delay, timeout=config.timeout, respect_robots=config.respect_robots
     ) as fetcher:
         while frontier and len(pages) < config.max_pages:
+            if should_stop():
+                stopped = True
+                break
             url, depth = frontier.pop()
             try:
                 page = fetcher.fetch(url)
@@ -100,4 +109,5 @@ def crawl(
         failed=failed,
         contents=contents,
         duration=time.monotonic() - started,
+        stopped=stopped,
     )

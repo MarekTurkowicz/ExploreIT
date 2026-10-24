@@ -68,3 +68,15 @@ def test_comparison_of_nothing_is_empty() -> None:
 def test_invalid_limits_are_rejected(value: str) -> None:
     with pytest.raises(ValueError, match="max_pages"):
         experiment_configs(SITE, max_pages=value)
+
+
+def test_stopping_skips_remaining_crawls(respx_mock: respx.MockRouter, tmp_path: Path) -> None:
+    respx_mock.get(SITE).respond(html='<a href="/a">A</a>')
+    respx_mock.get(f"{SITE}a").respond(html="<p>A</p>")
+    configs = experiment_configs(SITE, delay=0, respect_robots=False)
+
+    results = run_experiments(configs, tmp_path, should_stop=lambda: True)
+
+    assert len(results) == 1
+    assert results[0].stopped
+    assert len(list(tmp_path.glob("*.json"))) == 1

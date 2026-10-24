@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import tkinter as tk
 from pathlib import Path
@@ -49,6 +50,7 @@ class CrawlTab(ttk.Frame):
         self.separator = tk.StringVar(value=next(iter(SEPARATORS)))
         self.timer = tk.StringVar(value="Not started")
         self.running = False
+        self._stop_requested = threading.Event()
         self._started = 0.0
         self._pages = 0
         self.inputs: list[ttk.Widget] = []  # everything locked while a crawl runs
@@ -125,6 +127,11 @@ class CrawlTab(ttk.Frame):
             actions, text="Start crawl  (Ctrl+R)", command=self.start, bootstyle="primary"
         )
         self.start_button.pack(side="left")
+        self.stop_button = tb.Button(
+            actions, text="Stop  (Esc)", command=self.stop, bootstyle="danger"
+        )
+        self.stop_button.pack(side="left", padx=(8, 0))
+        self.stop_button.state(["disabled"])
         self.progress = tb.Progressbar(actions, mode="determinate", bootstyle="striped")
         self.progress.pack(side="left", fill="x", expand=True, padx=12)
         ttk.Label(actions, textvariable=self.timer, width=36, font="TkHeadingFont").pack(
@@ -155,6 +162,13 @@ class CrawlTab(ttk.Frame):
         state = ["disabled"] if locked else ["!disabled"]
         for widget in [*self.inputs, self.start_button]:
             widget.state(state)
+
+    def stop(self) -> None:
+        """Ask the running crawl to finish after the current page."""
+        if self.running and not self._stop_requested.is_set():
+            self._stop_requested.set()
+            self.stop_button.state(["disabled"])
+            self.app.set_status("Stopping after the current page …")
 
     def read_config(self) -> CrawlConfig:
         """Return the settings as a crawl config.
@@ -191,7 +205,9 @@ class CrawlTab(ttk.Frame):
 
         separator = SEPARATORS[self.separator.get()]
         self.running = True
+        self._stop_requested.clear()
         self.app.set_busy(True)
+        self.stop_button.state(["!disabled"])
         self.progress.configure(maximum=config.max_pages, value=0)
         self.log.delete("1.0", "end")
         self._started, self._pages = time.monotonic(), 0
@@ -205,7 +221,11 @@ class CrawlTab(ttk.Frame):
         self, config: CrawlConfig, fields: list[ContentField], separator: str
     ) -> tuple[CrawlResult, Path]:
         """Runs in a background thread."""
-        result = crawl(config, on_page=lambda page: self.app.tasks.call(self._log_page, page))
+        result = crawl(
+            config,
+            on_page=lambda page: self.app.tasks.call(self._log_page, page),
+            should_stop=self._stop_requested.is_set,
+        )
         path = self.app.data_dir / f"crawl-{timestamp()}.json"
         result.save(path)
         write_html(result, path.with_suffix(".html"))
@@ -232,14 +252,16 @@ class CrawlTab(ttk.Frame):
 
     def _stop(self) -> None:
         self.running = False
+        self.stop_button.state(["disabled"])
         self.app.set_busy(False)
 
     def _finish(self, outcome: tuple[CrawlResult, Path]) -> None:
         result, path = outcome
         self._stop()
         rate = len(result.pages) / result.duration if result.duration else 0.0
+        mark = "■ Stopped" if result.stopped else "✔"
         self.timer.set(
-            f"✔ {format_duration(result.duration)} · {len(result.pages)} pages · {rate:.1f}/s"
+            f"{mark} {format_duration(result.duration)} · {len(result.pages)} pages · {rate:.1f}/s"
         )
         for url, reason in result.failed.items():
             self.log.insert("end", f"failed  {url}: {reason}\n", "error")

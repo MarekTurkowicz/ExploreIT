@@ -9,7 +9,7 @@ import respx
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 from exploreit.gui import ExploreApp
-from exploreit.gui.app import create_window
+from exploreit.gui.app import DARK_THEME, create_window
 from exploreit.gui.widgets import Table
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
 from exploreit.storage import ContentField
@@ -190,11 +190,12 @@ def test_settings_are_locked_while_crawling(app: ExploreApp) -> None:
 
 
 def test_theme_and_font_size(app: ExploreApp) -> None:
-    app.set_theme("one-dark")
+    app.dark.set(True)
+    app.set_theme(DARK_THEME)
     app.set_font_size(30)
 
     assert app.font_size.get() == 20  # clamped to the largest size
-    assert app.root.style.theme_use() == "one-dark"
+    assert app.root.style.theme_use() == DARK_THEME
 
 
 @pytest.mark.usefixtures("site")
@@ -252,3 +253,19 @@ def test_table_sorts_numbers_numerically(app: ExploreApp) -> None:
     assert [row[1] for row in table.rows()] == ["9", "10", "100"]
     table._sort("Links")
     assert [row[1] for row in table.rows()] == ["100", "10", "9"]
+
+
+@pytest.mark.usefixtures("site")
+def test_stop_button_ends_the_crawl_early(app: ExploreApp) -> None:
+    fill_form(app)
+    app.crawl_tab.delay.set("0.3")
+
+    app.crawl_tab.start()
+    assert app.crawl_tab.stop_button.instate(["!disabled"])
+    app.crawl_tab.stop()
+    settle(app)
+
+    assert app.crawl_tab.timer.get().startswith("■ Stopped")
+    assert len(app.pages_tab.table.rows()) < 4
+    assert app.crawl_tab.stop_button.instate(["disabled"])
+    assert app.crawl_tab.start_button.instate(["!disabled"])

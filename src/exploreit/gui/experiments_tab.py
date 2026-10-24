@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import tkinter as tk
 from enum import StrEnum
@@ -42,6 +43,7 @@ class ExperimentsTab(ttk.Frame):
         super().__init__(master, padding=12)
         self.app = app
         self.running = False
+        self._stop_requested = threading.Event()
         self._started = 0.0
         self.boxes: list[ttk.Checkbutton] = []  # locked while experiments run
         ttk.Label(
@@ -62,6 +64,9 @@ class ExperimentsTab(ttk.Frame):
             actions, text="Run experiments", command=self.run, bootstyle="primary"
         )
         self.run_button.pack(side="left")
+        self.stop_button = tb.Button(actions, text="Stop", command=self.stop, bootstyle="danger")
+        self.stop_button.pack(side="left", padx=(8, 0))
+        self.stop_button.state(["disabled"])
         self.progress = tb.Progressbar(actions, mode="determinate", bootstyle="striped")
         self.progress.pack(side="left", fill="x", expand=True, padx=12)
         self.current = ttk.Label(actions, text="", width=46)
@@ -91,6 +96,13 @@ class ExperimentsTab(ttk.Frame):
         for widget in [*self.boxes, self.run_button]:
             widget.state(state)
 
+    def stop(self) -> None:
+        """Finish the running crawl early, save it, and skip the remaining ones."""
+        if self.running and not self._stop_requested.is_set():
+            self._stop_requested.set()
+            self.stop_button.state(["disabled"])
+            self.app.set_status("Stopping after the current page …")
+
     def run(self) -> None:
         if self.running or self.app.crawl_tab.running:
             return
@@ -114,7 +126,9 @@ class ExperimentsTab(ttk.Frame):
         )
         out_dir = self.app.data_dir / f"experiments-{timestamp()}"
         self.running = True
+        self._stop_requested.clear()
         self.app.set_busy(True)
+        self.stop_button.state(["!disabled"])
         self._started = time.monotonic()
         self.progress.configure(maximum=len(configs), value=0)
         self.current.configure(text=f"0 of {len(configs)} crawls")
@@ -124,7 +138,10 @@ class ExperimentsTab(ttk.Frame):
     def _experiment(self, configs: list[CrawlConfig], out_dir: Path) -> tuple[pd.DataFrame, Path]:
         """Runs in a background thread."""
         results = run_experiments(
-            configs, out_dir, on_crawl=lambda c, r: self.app.tasks.call(self._crawled, c, r)
+            configs,
+            out_dir,
+            on_crawl=lambda c, r: self.app.tasks.call(self._crawled, c, r),
+            should_stop=self._stop_requested.is_set,
         )
         return save_comparison(results, out_dir), out_dir
 
@@ -137,6 +154,7 @@ class ExperimentsTab(ttk.Frame):
 
     def _stop(self) -> None:
         self.running = False
+        self.stop_button.state(["disabled"])
         self.app.set_busy(False)
 
     def _failed(self, error: Exception) -> None:
@@ -146,7 +164,9 @@ class ExperimentsTab(ttk.Frame):
     def _finish(self, outcome: tuple[pd.DataFrame, Path]) -> None:
         table, out_dir = outcome
         self._stop()
-        self.current.configure(text=f"✔ {format_duration(time.monotonic() - self._started)}")
+        mark = "■ Stopped" if self._stop_requested.is_set() else "✔"
+        elapsed = format_duration(time.monotonic() - self._started)
+        self.current.configure(text=f"{mark} {elapsed} · {len(table)} crawls")
         rows = (
             [f"{value:.1f}" if isinstance(value, float) else value for value in row]
             for row in table[SUMMARY_COLUMNS].itertuples(index=False)

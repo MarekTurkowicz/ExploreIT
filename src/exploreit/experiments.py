@@ -60,14 +60,21 @@ def run_experiments(
     configs: list[CrawlConfig],
     out_dir: Path,
     on_crawl: Callable[[CrawlConfig, CrawlResult], object] = lambda *_: None,
+    should_stop: Callable[[], bool] = lambda: False,
 ) -> list[CrawlResult]:
-    """Run every crawl and save each result as `<strategy>-<scope>-<link_mode>.json`."""
+    """Run every crawl and save each result as `<strategy>-<scope>-<link_mode>.json`.
+
+    When `should_stop` returns True, the running crawl ends early, is saved, and no
+    further crawls start.
+    """
     results = []
     for config in configs:
-        result = crawl(config)
+        result = crawl(config, should_stop=should_stop)
         result.save(out_dir / f"{experiment_name(config)}.json")
         on_crawl(config, result)
         results.append(result)
+        if result.stopped:
+            break
     return results
 
 

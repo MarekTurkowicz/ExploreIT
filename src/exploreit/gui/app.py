@@ -16,7 +16,7 @@ from exploreit.gui.graph_tab import GraphTab
 from exploreit.gui.results_tab import ContentTab, PagesTab, ResultsTab
 from exploreit.gui.widgets import TaskRunner
 
-DEFAULT_THEME = "nord-light"
+LIGHT_THEME, DARK_THEME = "nord-light", "nord-dark"
 DEFAULT_FONT_SIZE = 12
 FONT_SIZES = range(9, 21)
 UI_FONTS = ["TkDefaultFont", "TkTextFont", "TkMenuFont", "TkCaptionFont", "TkTooltipFont"]
@@ -30,7 +30,7 @@ class ExploreApp:
         self.data_dir = data_dir
         self.tasks = TaskRunner(root)
         self.status = tk.StringVar(value=f"Results are saved in {data_dir.resolve()}")
-        self.theme = tk.StringVar(value=root.style.theme_use())
+        self.dark = tk.BooleanVar(value=False)
         self.font_size = tk.IntVar(value=DEFAULT_FONT_SIZE)
         self.set_font_size(DEFAULT_FONT_SIZE)
 
@@ -58,6 +58,7 @@ class ExploreApp:
         self._build_status_bar()
 
         root.bind("<Control-r>", lambda _: self.crawl_tab.start())
+        root.bind("<Escape>", lambda _: self.crawl_tab.stop())
         root.bind("<Control-equal>", lambda _: self.set_font_size(self.font_size.get() + 1))
         root.bind("<Control-plus>", lambda _: self.set_font_size(self.font_size.get() + 1))
         root.bind("<Control-minus>", lambda _: self.set_font_size(self.font_size.get() - 1))
@@ -66,16 +67,13 @@ class ExploreApp:
         bar = ttk.Frame(self.root, padding=(10, 6))
         bar.pack(fill="x")
         ttk.Label(bar, textvariable=self.status).pack(side="left")
-        theme = ttk.Combobox(
+        tb.Checkbutton(
             bar,
-            textvariable=self.theme,
-            values=sorted(name for name in self.root.style.theme_names() if "-" in name),
-            state="readonly",
-            width=18,
-        )
-        theme.pack(side="right")
-        theme.bind("<<ComboboxSelected>>", lambda _: self.set_theme(self.theme.get()))
-        ttk.Label(bar, text="Theme").pack(side="right", padx=(16, 6))
+            text="Dark mode",
+            variable=self.dark,
+            command=lambda: self.set_theme(DARK_THEME if self.dark.get() else LIGHT_THEME),
+            bootstyle="round-toggle",
+        ).pack(side="right", padx=(16, 0))
         size = ttk.Spinbox(
             bar,
             from_=FONT_SIZES[0],
@@ -127,7 +125,7 @@ class ExploreApp:
 
 
 def create_window(data_dir: Path = Path("data")) -> tuple[tb.Window, ExploreApp]:
-    root = tb.Window(title="ExploreIT", themename=DEFAULT_THEME, size=(1360, 880))
+    root = tb.Window(title="ExploreIT", themename=LIGHT_THEME, size=(1360, 880))
     root.minsize(1000, 680)
     return root, ExploreApp(root, data_dir)
 

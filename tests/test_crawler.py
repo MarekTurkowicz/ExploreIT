@@ -157,3 +157,15 @@ def test_redirected_start_page_becomes_the_start() -> None:
         "https://www.example.com/a",
     ]
     assert [edge.target for edge in result.edges] == ["https://www.example.com/a"]
+
+
+@pytest.mark.usefixtures("site")
+def test_crawl_can_be_stopped() -> None:
+    visited: list[CrawledPage] = []
+    config = CrawlConfig(start_url=SITE, delay=0, respect_robots=False)
+
+    result = crawl(config, on_page=visited.append, should_stop=lambda: len(visited) >= 2)
+
+    assert result.stopped
+    assert len(result.pages) == 2
+    assert not run().stopped
