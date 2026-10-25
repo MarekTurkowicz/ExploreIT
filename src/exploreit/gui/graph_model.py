@@ -6,9 +6,11 @@ Kept free of Tk so it can be tested and reused without a window.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from math import sqrt
+from types import MappingProxyType
 from urllib.parse import urlsplit
 
 from exploreit.crawler import CrawlResult
@@ -38,6 +40,7 @@ class ColourBy(StrEnum):
 class SizeBy(StrEnum):
     LINKS_IN = "links in"
     LINKS_OUT = "links out"
+    PRESTIGE = "prestige"
     EQUAL = "equal"
 
 
@@ -52,6 +55,7 @@ class Node:
     visited: bool
     links_in: int
     links_out: int
+    prestige: float = 0.0  # score from the Ranking tab, 0 until a ranking is shown
 
     @property
     def host(self) -> str:
@@ -72,7 +76,11 @@ class GraphData:
     edges: list[tuple[str, str]]
 
 
-def graph_data(result: CrawlResult, visited_only: bool = True) -> GraphData:
+def graph_data(
+    result: CrawlResult,
+    visited_only: bool = True,
+    prestige: Mapping[str, float] = MappingProxyType({}),
+) -> GraphData:
     graph = build_graph(result, visited_only=visited_only)
     nodes = {
         url: Node(
@@ -83,6 +91,7 @@ def graph_data(result: CrawlResult, visited_only: bool = True) -> GraphData:
             visited=data["visited"],
             links_in=graph.in_degree(url),
             links_out=graph.out_degree(url),
+            prestige=prestige.get(url, 0.0),
         )
         for url, data in graph.nodes(data=True)
     }
@@ -152,10 +161,26 @@ def legend(data: GraphData, colour_by: ColourBy) -> list[tuple[Category, int]]:
     return sorted(counts.items(), key=lambda item: _legend_order(item[0], colour_by, hosts))
 
 
-def radius(node: Node, size_by: SizeBy, scale: float = 1.0) -> float:
-    """Node radius in pixels: grows with the square root, so hubs do not swamp the view."""
+def radius(node: Node, size_by: SizeBy, scale: float = 1.0, top_prestige: float = 1.0) -> float:
+    """Node radius in pixels: grows with the square root, so hubs do not swamp the view.
+
+    Prestige is measured against the most prestigious page, `top_prestige`.
+    """
+    if size_by is SizeBy.PRESTIGE:
+        share = node.prestige / top_prestige if top_prestige > 0 else 0.0
+        return (4 + 22 * sqrt(max(share, 0.0))) * scale
     links = {SizeBy.LINKS_IN: node.links_in, SizeBy.LINKS_OUT: node.links_out}.get(size_by, 0)
     return (5 + 2.2 * sqrt(links)) * scale
+
+
+def top_prestige(data: GraphData) -> float:
+    return max((node.prestige for node in data.nodes.values()), default=0.0)
+
+
+def node_label(node: Node, start_url: str, size_by: SizeBy) -> str:
+    """The page name, followed by its prestige when the graph is sized by prestige."""
+    label = short_label(node.url, start_url)
+    return f"{label}  {node.prestige:.3g}" if size_by is SizeBy.PRESTIGE else label
 
 
 def short_label(url: str, start_url: str) -> str:

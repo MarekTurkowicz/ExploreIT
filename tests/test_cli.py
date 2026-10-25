@@ -198,3 +198,29 @@ def test_crawl_command_rejects_bad_header() -> None:
     result = runner.invoke(app, ["crawl", "https://example.com", "--header", "nocolon"])
 
     assert result.exit_code == 2
+
+
+def test_rank_command_prints_and_saves_rankings(tmp_path: Path) -> None:
+    pages = [f"https://example.com/{name}" for name in ("", "a", "b")]
+    edges = [
+        Edge(source=pages[0], target=pages[1], kind=LinkKind.ANCHOR),
+        Edge(source=pages[1], target=pages[2], kind=LinkKind.ANCHOR),
+        Edge(source=pages[2], target=pages[0], kind=LinkKind.ANCHOR),
+    ]
+    crawl_file = tmp_path / "crawl.json"
+    CrawlResult(
+        config=CrawlConfig(start_url=pages[0]),
+        pages=[
+            CrawledPage(url=p, depth=0, status_code=200, content_type="text/html") for p in pages
+        ],
+        edges=edges,
+        failed={},
+    ).save(crawl_file)
+
+    result = runner.invoke(app, ["rank", str(crawl_file), "--smoothing", "0.2"])
+
+    assert result.exit_code == 0, result.output
+    assert "eigenvector" in result.output
+    assert "P1 → P2 → P3 → P1" in result.output
+    assert (tmp_path / "crawl-ranking.csv").exists()
+    assert (tmp_path / "crawl-A-weighted.csv").exists()

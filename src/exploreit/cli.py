@@ -32,6 +32,7 @@ from exploreit.frontier import Strategy
 from exploreit.graph import compute_stats
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
+from exploreit.ranking.prestige import Dangling, Normalization
 from exploreit.storage import ContentField, write_csv, write_sqlite
 from exploreit.urls import Scope
 
@@ -228,6 +229,96 @@ def experiment(
 
     run_experiments(configs, output, on_crawl=report)
     _print_comparison(output)
+
+
+@app.command()
+def rank(
+    crawl_file: CrawlFile = Path("data/crawl.json"),
+    normalization: Annotated[
+        Normalization, typer.Option(help="How prestige is rescaled after every step.")
+    ] = Normalization.SUM,
+    dangling: Annotated[
+        Dangling, typer.Option(help="What happens to the vote of pages without links out.")
+    ] = Dangling.LOST,
+    smoothing: Annotated[
+        float, typer.Option(min=0, max=0.99, help="Part of the old value kept each step.")
+    ] = 0.0,
+    max_iterations: Annotated[int, typer.Option(min=1, help="Stop after this many steps.")] = 200,
+    top: Annotated[int, typer.Option(min=1, help="How many pages to list.")] = 20,
+) -> None:
+    """Rank the pages of a crawl by their links with every method and compare them.
+
+    Saves the ranking, both adjacency matrices and a page legend as CSV next to the
+    crawl file.
+    """
+    from exploreit.ranking.graph import check_requirements, link_graph, shortest_cycle
+    from exploreit.ranking.matrix import (
+        adjacency_matrix,
+        short_labels,
+        write_legend_csv,
+        write_matrix_csv,
+    )
+    from exploreit.ranking.methods import Settings, compare, write_ranking_csv
+
+    graph = link_graph(CrawlResult.load(crawl_file))
+    labels = dict(zip(graph.pages, short_labels(graph), strict=True))
+    checks = Table(title="Graph requirements", show_header=False)
+    for check in check_requirements(graph):
+        checks.add_row(
+            "[green]✔[/]" if check.met else "[red]✘[/]", check.description, str(check.actual)
+        )
+    if cycle := shortest_cycle(graph):
+        checks.add_row("", "cycle", " → ".join(labels[page] for page in [*cycle, cycle[0]]))
+    console.print(checks)
+    if not graph.pages:
+        raise typer.Exit(code=1)
+
+    settings = Settings(
+        normalization=normalization,
+        dangling=dangling,
+        smoothing=smoothing,
+        max_iterations=max_iterations,
+    )
+    comparison = compare(graph, settings)
+    methods = Table(title="Methods")
+    for column in ("method", "iterations", "settled", "ms"):
+        methods.add_column(column, justify="left" if column == "method" else "right")
+    for result in comparison.results:
+        methods.add_row(
+            result.method.name,
+            str(result.scores.iterations),
+            "yes" if result.scores.converged else "[red]no[/]",
+            f"{result.seconds * 1000:.1f}",
+        )
+    console.print(methods)
+
+    ranking = Table(title=f"Top {top} pages (place and score per method)")
+    ranking.add_column("page")
+    ranking.add_column("url", overflow="fold")
+    for result in comparison.results:
+        ranking.add_column(result.method.name, justify="right")
+    for page, page_places, scores in comparison.table()[:top]:
+        cells = (f"{p}. {s:.4g}" for p, s in zip(page_places, scores, strict=True))
+        ranking.add_row(labels[page], escape(page), *cells)
+    console.print(ranking)
+
+    agreement = Table(title="Agreement (Kendall tau: 1 same order, -1 reversed)")
+    agreement.add_column("methods")
+    agreement.add_column("tau", justify="right")
+    for first, second, tau in comparison.agreement():
+        agreement.add_row(f"{first} vs {second}", f"{tau:.3f}")
+    console.print(agreement)
+
+    stem = crawl_file.with_name(crawl_file.stem)
+    write_ranking_csv(comparison, Path(f"{stem}-ranking.csv"))
+    write_matrix_csv(adjacency_matrix(graph), list(labels.values()), Path(f"{stem}-A.csv"))
+    write_matrix_csv(
+        adjacency_matrix(graph, weighted=True),
+        list(labels.values()),
+        Path(f"{stem}-A-weighted.csv"),
+    )
+    write_legend_csv(graph, Path(f"{stem}-pages.csv"))
+    console.print(f"Saved {stem.name}-ranking.csv, -A.csv, -A-weighted.csv and -pages.csv")
 
 
 @app.command()

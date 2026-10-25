@@ -4,16 +4,18 @@ Adding a method means writing one function `(graph, settings) -> Scores` and lis
 it in METHODS; the comparison, the command line and the application pick it up.
 """
 
+import csv
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from itertools import combinations
+from pathlib import Path
 
 import numpy as np
 
 from exploreit.ranking.eigen import leading_eigenvector
 from exploreit.ranking.graph import LinkGraph
-from exploreit.ranking.matrix import adjacency_matrix
+from exploreit.ranking.matrix import adjacency_matrix, short_labels
 from exploreit.ranking.prestige import Dangling, Normalization, prestige
 
 
@@ -126,6 +128,25 @@ METHODS = [
         _eigenvector,
     ),
 ]
+
+
+def write_ranking_csv(comparison: Comparison, path: Path) -> None:
+    """Save the place and score of every page under every method, best first."""
+    labels = dict(zip(comparison.graph.pages, short_labels(comparison.graph), strict=True))
+    names = [result.method.name for result in comparison.results]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.writer(file)
+        writer.writerow(
+            ["label", "url", *(f"{name} {kind}" for name in names for kind in ("place", "score"))]
+        )
+        for page, page_places, scores in comparison.table():
+            values = (
+                value
+                for place, score in zip(page_places, scores, strict=True)
+                for value in (place, f"{score:.6g}")
+            )
+            writer.writerow([labels[page], page, *values])
 
 
 def run_method(method: Method, graph: LinkGraph, settings: Settings) -> MethodResult:

@@ -23,9 +23,10 @@ from exploreit.gui.graph_model import (
     graph_data,
     hosts_by_frequency,
     legend,
+    node_label,
     positions,
     radius,
-    short_label,
+    top_prestige,
 )
 
 if TYPE_CHECKING:
@@ -45,6 +46,7 @@ class GraphTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.app = app
         self.data = GraphData({}, [])
+        self.prestige: dict[str, float] = {}  # set by the Ranking tab
         self.layout = tk.StringVar(value=Layout.LEVELS)
         self.colour_by = tk.StringVar(value=ColourBy.LEVEL)
         self.size_by = tk.StringVar(value=SizeBy.LINKS_IN)
@@ -128,14 +130,27 @@ class GraphTab(ttk.Frame):
 
     def show(self, result: CrawlResult, path: Path) -> None:
         self.result, self.crawl_file = result, path
+        self.prestige = {}
+        if self.size_by.get() == SizeBy.PRESTIGE:
+            self.size_by.set(SizeBy.LINKS_IN)
+        self.reload()
+
+    def show_prestige(self, scores: dict[str, float]) -> None:
+        """Size pages by their prestige and print it next to their names (task 3.3)."""
+        self.prestige = scores
+        self.size_by.set(SizeBy.PRESTIGE)
+        self.labels.set(True)
         self.reload()
 
     def reload(self) -> None:
         """Rebuild the graph from the crawl, e.g. after toggling unvisited pages."""
         if not hasattr(self, "result"):
             return
-        self.data = graph_data(self.result, visited_only=not self.unvisited.get())
-        self.labels.set(len(self.data.nodes) <= LABELS_BY_DEFAULT_UP_TO)
+        self.data = graph_data(
+            self.result, visited_only=not self.unvisited.get(), prestige=self.prestige
+        )
+        if not self.prestige:
+            self.labels.set(len(self.data.nodes) <= LABELS_BY_DEFAULT_UP_TO)
         self.relayout()
 
     def relayout(self) -> None:
@@ -163,8 +178,14 @@ class GraphTab(ttk.Frame):
             self.data.edges,
             world,
             {url: category(node, style.colour_by, hosts).colour for url, node in nodes.items()},
-            {url: radius(node, style.size_by, style.node_scale) for url, node in nodes.items()},
-            {url: short_label(url, self.result.config.start_url) for url in nodes}
+            {
+                url: radius(node, style.size_by, style.node_scale, top_prestige(self.data))
+                for url, node in nodes.items()
+            },
+            {
+                url: node_label(node, self.result.config.start_url, style.size_by)
+                for url, node in nodes.items()
+            }
             if style.labels
             else {},
             f"{self.result.config.start_url} · {self.result.config.describe()}",

@@ -10,6 +10,7 @@ from exploreit.gui.graph_model import (
     graph_data,
     hosts_by_frequency,
     legend,
+    node_label,
     positions,
     radius,
     short_label,
@@ -97,3 +98,14 @@ def test_radius_grows_with_links() -> None:
 def test_short_label() -> None:
     assert short_label(f"{START}a?x=1", START) == "/a?x=1"
     assert short_label("http://example.com/a", START) == "http://example.com/a"
+
+
+def test_prestige_sets_size_and_label() -> None:
+    data = graph_data(RESULT, prestige={START: 4.0, f"{START}a": 1.0})
+    home, a = data.nodes[START], data.nodes[f"{START}a"]
+
+    assert radius(home, SizeBy.PRESTIGE, top_prestige=4.0) > radius(
+        a, SizeBy.PRESTIGE, top_prestige=4.0
+    )
+    assert node_label(home, START, SizeBy.PRESTIGE) == "/  4"
+    assert node_label(home, START, SizeBy.LINKS_IN) == "/"

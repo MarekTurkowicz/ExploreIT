@@ -10,6 +10,8 @@ as a link graph, stores page content and analyses how crawl parameters affect th
 - Comparison of datasets produced with different crawl settings
 - Link graph drawn in the app (by level or force-directed), exported as interactive HTML
   or GEXF for Gephi
+- Link-based ranking: adjacency matrix, iterative prestige (plain and weighted by outgoing
+  links), leading eigenvector, compared with Kendall's tau
 - Desktop application (Tkinter) and a command line for scripted experiments
 
 ## Requirements
@@ -52,6 +54,9 @@ exploreit summarize data/experiments
 exploreit crawl https://example.com --scope web --max-depth 2 --content -o data/a.json
 exploreit store data/a.json --field url --field keywords --separator ";" --sqlite
 exploreit diff data/a.json data/b.json      # compare two content databases
+
+# Rank pages by their links with every method; saves rankings and matrices as CSV
+exploreit rank data/crawl.json --smoothing 0.2 --top 20
 exploreit --help
 ```
 

@@ -63,3 +63,14 @@ def test_network_figure_draws_saved_positions(tmp_path: Path) -> None:
 
 def test_network_figure_of_nothing() -> None:
     assert len(network_figure([], {}, {}, {}, {}, "empty").axes[0].collections) == 0
+
+
+def test_convergence_figure(tmp_path: Path) -> None:
+    import numpy as np
+
+    from exploreit.plots import convergence_figure
+
+    histories = {"a": [np.ones(3), np.array([0.5, 1.0, 1.5]), np.array([0.6, 1.0, 1.4])], "b": []}
+    save_figure(convergence_figure(histories), tmp_path / "c.png")
+
+    assert (tmp_path / "c.png").read_bytes().startswith(PNG_SIGNATURE)

@@ -162,7 +162,11 @@ class ChartPanel(ttk.Frame):
         canvas = FigureCanvasTkAgg(figure, master=self)
         if self.toolbar:
             NavigationToolbar2Tk(canvas, self, pack_toolbar=False).pack(side="bottom", fill="x")
-        canvas.get_tk_widget().pack(fill="both", expand=True)
+        widget = canvas.get_tk_widget()
+        # Ask for little room and fill whatever the layout gives: the figure is redrawn to
+        # fit, instead of forcing the window to its own size in inches.
+        widget.configure(width=200, height=150)
+        widget.pack(fill="both", expand=True)
         canvas.draw()
         return canvas
 

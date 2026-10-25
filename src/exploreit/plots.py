@@ -4,9 +4,11 @@ as PNG or shown inside the application window."""
 from __future__ import annotations
 
 from collections import Counter
+from itertools import pairwise
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
@@ -16,7 +18,7 @@ from matplotlib.ticker import MaxNLocator
 from exploreit.crawler import CrawlResult
 from exploreit.graph import compute_stats
 
-SERIES = ["#2a78d6", "#eb6834"]  # categorical slots 1-2: blue, orange
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]  # categorical slots 1-3: blue, orange, aqua
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
 INK_SECONDARY = "#52514e"
@@ -86,6 +88,38 @@ def comparison_figure(table: pd.DataFrame) -> Figure:
     axes[0].invert_yaxis()
     figure.legend(*axes[0].get_legend_handles_labels(), loc="outside upper right", frameon=False)
     figure.suptitle("Crawl parameters compared", x=0.01, ha="left", fontsize=12, color=INK)
+    return figure
+
+
+def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
+    """How much prestige still changes after each iteration, per method (log scale).
+
+    A line that keeps falling settles; a flat line means values swap back and forth.
+    """
+    figure, ax = _figure(width=7, height=3.8)
+    drawn = 0
+    for index, (name, history) in enumerate(histories.items()):
+        if len(history) < 2:
+            continue
+        changes = [
+            max(float(np.abs(after - before).max()), 1e-16) for before, after in pairwise(history)
+        ]
+        ax.plot(
+            range(1, len(changes) + 1),
+            changes,
+            color=SERIES[index % len(SERIES)],
+            linewidth=2,
+            label=name,
+        )
+        drawn += 1
+    ax.set_yscale("log")
+    _style(ax, grid_axis="y")
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Largest change")
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_title("How fast prestige settles", loc="left", fontsize=11, color=INK)
+    if drawn > 1:
+        ax.legend(frameon=False, fontsize=9)
     return figure
 
 

@@ -15,8 +15,9 @@ from exploreit.gui.graph_model import (
     SizeBy,
     category,
     hosts_by_frequency,
+    node_label,
     radius,
-    short_label,
+    top_prestige,
 )
 
 MARGIN = 50
@@ -66,6 +67,7 @@ class GraphCanvas(tk.Canvas):
         self._items_to_url: dict[int, str] = {}
         self._edges_of: defaultdict[str, list[tuple[str, str]]] = defaultdict(list)
         self._colours: dict[str, str] = {}
+        self._top = 0.0
         self._hovered = ""
         self._drag_url = ""
         self._last_mouse = (0, 0)
@@ -101,9 +103,7 @@ class GraphCanvas(tk.Canvas):
             item = self.create_oval(0, 0, 0, 0, width=1.5, tags="node")
             self._node_items[url] = item
             self._items_to_url[item] = url
-            label = self.create_text(
-                0, 0, anchor="w", text=short_label(url, start_url), tags="label", font=LABEL_FONT
-            )
+            label = self.create_text(0, 0, anchor="w", text="", tags="label", font=LABEL_FONT)
             self._label_items[url] = label
             self._items_to_url[label] = url
         self.fit()
@@ -112,6 +112,7 @@ class GraphCanvas(tk.Canvas):
     def restyle(self, style: Style) -> None:
         """Apply colours, sizes and visibility without moving anything."""
         self.style = style
+        self._top = top_prestige(self.data)
         self.configure(background=style.background)
         hosts = hosts_by_frequency(self.data)
         self._colours = {
@@ -120,9 +121,12 @@ class GraphCanvas(tk.Canvas):
         }
         for url, item in self._node_items.items():
             self.itemconfigure(item, fill=self._colours[url], outline=style.background)
-        for item in self._label_items.values():
+        for url, item in self._label_items.items():
             self.itemconfigure(
-                item, fill=style.foreground, state="normal" if style.labels else "hidden"
+                item,
+                text=node_label(self.data.nodes[url], self.start_url, style.size_by),
+                fill=style.foreground,
+                state="normal" if style.labels else "hidden",
             )
         for item in self._edge_items.values():
             self.itemconfigure(
@@ -180,9 +184,12 @@ class GraphCanvas(tk.Canvas):
                 return self._items_to_url[item]
         return ""
 
+    def _radius(self, node: Node) -> float:
+        return radius(node, self.style.size_by, self.style.node_scale, self._top)
+
     def _place_node(self, url: str) -> None:
         x, y = self.screen(url)
-        r = radius(self.data.nodes[url], self.style.size_by, self.style.node_scale)
+        r = self._radius(self.data.nodes[url])
         self.coords(self._node_items[url], x - r, y - r, x + r, y + r)
         self.coords(self._label_items[url], x + r + 4, y)
 
@@ -190,7 +197,7 @@ class GraphCanvas(tk.Canvas):
         (x1, y1), (x2, y2) = self.screen(edge[0]), self.screen(edge[1])
         length = hypot(x2 - x1, y2 - y1) or 1.0
         # Stop the arrow at the edge of the target circle so its head stays visible.
-        r = radius(self.data.nodes[edge[1]], self.style.size_by, self.style.node_scale) + 1
+        r = self._radius(self.data.nodes[edge[1]]) + 1
         self.coords(
             self._edge_items[edge], x1, y1, x2 - (x2 - x1) * r / length, y2 - (y2 - y1) * r / length
         )
@@ -271,7 +278,7 @@ class GraphCanvas(tk.Canvas):
         """A small card next to the page with what is known about it."""
         self.delete("tip")
         x, y = self.screen(node.url)
-        r = radius(node, self.style.size_by, self.style.node_scale)
+        r = self._radius(node)
         text = self.create_text(
             x + r + 12,
             y + r + 10,
@@ -317,5 +324,7 @@ def describe(node: Node) -> str:
     else:
         lines.append("Linked but not visited")
     lines.append(f"Links out {node.links_out} · links in {node.links_in}")
+    if node.prestige:
+        lines.append(f"Prestige {node.prestige:.4g}")
     lines.append("Drag to move · double-click to open")
     return "\n".join(lines)

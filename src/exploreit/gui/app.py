@@ -14,6 +14,7 @@ from exploreit.gui.crawl_tab import CrawlTab
 from exploreit.gui.experiments_tab import ExperimentsTab
 from exploreit.gui.graph_canvas import LABEL_FONT
 from exploreit.gui.graph_tab import GraphTab
+from exploreit.gui.ranking_tab import RankingTab
 from exploreit.gui.results_tab import ContentTab, PagesTab, ResultsTab
 from exploreit.gui.widgets import TaskRunner
 
@@ -44,6 +45,7 @@ class ExploreApp:
         self.graph_tab = GraphTab(self.notebook, self)
         self.pages_tab = PagesTab(self.notebook)
         self.content_tab = ContentTab(self.notebook, self)
+        self.ranking_tab = RankingTab(self.notebook, self)
         self.experiments_tab = ExperimentsTab(self.notebook, self)
         self.compare_tab = CompareTab(self.notebook, self)
         tabs: list[tuple[ttk.Frame, str]] = [
@@ -52,6 +54,7 @@ class ExploreApp:
             (self.graph_tab, "  Graph  "),
             (self.pages_tab, "  Pages  "),
             (self.content_tab, "  Content  "),
+            (self.ranking_tab, "  Ranking  "),
             (self.experiments_tab, "  Experiments  "),
             (self.compare_tab, "  Compare  "),
         ]
@@ -169,8 +172,17 @@ class ExploreApp:
         self.graph_tab.show(result, path)
         self.pages_tab.show(result)
         self.content_tab.show(result, path)
+        self.ranking_tab.show(result, path)
         self.notebook.select(self.results_tab)
         self.set_status(f"{len(result.pages)} pages, {len(result.edges)} links · {path}")
+
+
+def _maximise(root: tk.Tk) -> None:
+    """Start with the whole screen, so the larger text never squeezes the layout."""
+    try:
+        root.state("zoomed")  # Windows and macOS
+    except tk.TclError:
+        root.attributes("-zoomed", True)  # X11
 
 
 def _warm_up() -> None:
@@ -199,6 +211,7 @@ def create_window(data_dir: Path = Path("data")) -> tuple[tb.Window, ExploreApp]
 def run_app(data_dir: Path = Path("data")) -> None:
     """Open the ExploreIT window in front of other windows and run until it is closed."""
     root, app = create_window(data_dir)
+    _maximise(root)
     root.lift()
     root.attributes("-topmost", True)
     root.after(800, lambda: root.attributes("-topmost", False))

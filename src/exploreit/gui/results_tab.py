@@ -76,7 +76,7 @@ class ResultsTab(ttk.Frame):
 
     def show(self, result: CrawlResult, path: Path) -> None:
         self.result, self.crawl_file = result, path
-        self.file_label.configure(text=str(path))
+        self.file_label.configure(text=path.name)  # the full path is in the status bar
         self.stats.set_rows(["Metric", "Value"], compute_stats(result).summary(), widths=[190])
         from exploreit.plots import levels_figure
 
