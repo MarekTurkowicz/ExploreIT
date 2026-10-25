@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from exploreit.fetcher import USER_AGENT, Fetcher, FetchError
+from exploreit.fetcher import USER_AGENT, Fetcher, FetchError, bot_protection
 
 SITE = "https://example.com"
 PAGE = f"{SITE}/page"
@@ -138,3 +138,51 @@ def test_charset_from_meta_tag_when_header_has_none(
 def test_invalid_url_raises_fetch_error(fetcher: Fetcher) -> None:
     with pytest.raises(FetchError, match="cannot fetch"):
         fetcher.fetch("https://exa mple.com/")
+
+
+def test_custom_user_agent_and_headers_are_sent(respx_mock: respx.MockRouter) -> None:
+    route = respx_mock.get(PAGE).respond(html="")
+
+    with Fetcher(delay=0, respect_robots=False, user_agent="Test/1", headers={"X-A": "1"}) as f:
+        f.fetch(PAGE)
+
+    sent = route.calls.last.request.headers
+    assert sent["User-Agent"] == "Test/1"
+    assert sent["X-A"] == "1"
+
+
+def test_block_page_names_the_protection(respx_mock: respx.MockRouter, fetcher: Fetcher) -> None:
+    respx_mock.get(PAGE).respond(
+        403,
+        headers={"x-dd-b": "2"},
+        html="<script>var dd={'host':'geo.captcha-delivery.com'}</script>",
+    )
+
+    page = fetcher.fetch(PAGE)
+
+    assert page.status_code == 403
+    assert page.blocked_by == "DataDome"
+    assert page.html == ""
+
+
+@pytest.mark.parametrize(
+    ("headers", "body", "expected"),
+    [
+        ({"X-DataDome": "protected"}, "", "DataDome"),
+        ({"cf-mitigated": "challenge"}, "", "Cloudflare"),
+        ({"Server": "cloudflare"}, "<title>Just a moment...</title>", "Cloudflare"),
+        ({"Server": "AkamaiGHost"}, "Access Denied", "Akamai"),
+        ({}, "Please solve this CAPTCHA", "a CAPTCHA"),
+        ({"Server": "nginx"}, "<h1>Forbidden</h1>", ""),
+    ],
+)
+def test_bot_protection(headers: dict[str, str], body: str, expected: str) -> None:
+    assert bot_protection(headers, body) == expected
+
+
+def test_plain_forbidden_page_is_not_a_bot_block(
+    respx_mock: respx.MockRouter, fetcher: Fetcher
+) -> None:
+    respx_mock.get(PAGE).respond(403, html="<h1>Forbidden</h1>")
+
+    assert fetcher.fetch(PAGE).blocked_by == ""

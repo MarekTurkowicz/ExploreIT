@@ -11,11 +11,11 @@ from tkinter.scrolledtext import ScrolledText
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
-from pydantic import ValidationError
 
-from exploreit.config import CrawlConfig
+from exploreit.config import CrawlConfig, parse_headers
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.export import write_html
+from exploreit.fetcher import USER_AGENT
 from exploreit.frontier import Strategy
 from exploreit.graph import format_duration
 from exploreit.gui.widgets import describe_errors, show_error, timestamp
@@ -45,6 +45,7 @@ class CrawlTab(ttk.Frame):
         self.max_pages = tk.StringVar(value="100")
         self.delay = tk.StringVar(value="1.0")
         self.respect_robots = tk.BooleanVar(value=True)
+        self.user_agent = tk.StringVar(value=USER_AGENT)
         self.store_content = tk.BooleanVar(value=False)
         self.fields = {field: tk.BooleanVar(value=True) for field in ContentField}
         self.separator = tk.StringVar(value=next(iter(SEPARATORS)))
@@ -101,6 +102,23 @@ class CrawlTab(ttk.Frame):
             bootstyle="round-toggle",
         )
         self._add(robots).grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
+
+        ttk.Label(settings, text="User-Agent").grid(row=5, column=0, sticky="w", pady=6)
+        self._add(ttk.Entry(settings, textvariable=self.user_agent)).grid(
+            row=5, column=1, columnspan=5, sticky="ew", pady=6
+        )
+        ttk.Label(settings, text="Extra headers\n(Name: value)").grid(
+            row=6, column=0, sticky="nw", pady=6
+        )
+        self.headers = tk.Text(settings, height=2, relief="flat", borderwidth=6)
+        self.headers.grid(row=6, column=1, columnspan=5, sticky="ew", pady=6)
+        ttk.Label(
+            settings,
+            text="Some small sites block unknown programs by User-Agent. Anti-bot services "
+            "such as DataDome or Cloudflare check far more than headers and still refuse.",
+            wraplength=900,
+            foreground="#898781",
+        ).grid(row=7, column=1, columnspan=5, sticky="w")
 
         ttk.Label(settings, text="Save results in").grid(row=4, column=0, sticky="w", pady=6)
         self._add(ttk.Entry(settings, textvariable=self.app.output_dir)).grid(
@@ -169,6 +187,12 @@ class CrawlTab(ttk.Frame):
 
     def apply_theme(self) -> None:
         colours = self.app.theme_colours()
+        for text in (self.log, self.headers):
+            text.configure(
+                background=colours.inputbg,
+                foreground=colours.inputfg,
+                insertbackground=colours.inputfg,
+            )
         self.log.configure(
             background=colours.inputbg,
             foreground=colours.inputfg,
@@ -195,7 +219,8 @@ class CrawlTab(ttk.Frame):
         """Return the settings as a crawl config.
 
         Raises:
-            ValidationError: If a setting is missing or invalid.
+            ValueError: If a setting is missing or invalid (pydantic's ValidationError
+                is a ValueError too).
         """
         return CrawlConfig.model_validate(
             {
@@ -208,6 +233,8 @@ class CrawlTab(ttk.Frame):
                 "delay": self.delay.get(),
                 "respect_robots": self.respect_robots.get(),
                 "store_content": self.store_content.get(),
+                "user_agent": self.user_agent.get().strip(),
+                "headers": parse_headers(self.headers.get("1.0", "end")),
             }
         )
 
@@ -216,7 +243,7 @@ class CrawlTab(ttk.Frame):
             return
         try:
             config = self.read_config()
-        except ValidationError as error:
+        except ValueError as error:
             messagebox.showerror("Invalid settings", describe_errors(error))
             return
         fields = self.csv_fields()
@@ -268,7 +295,10 @@ class CrawlTab(ttk.Frame):
         self._pages += 1
         self.log.insert("end", f"{page.depth}  ", "dim")
         self.log.insert("end", f"{page.status_code}  ", "ok" if page.status_code < 400 else "error")
-        self.log.insert("end", f"{page.url}\n")
+        self.log.insert("end", page.url)
+        if page.blocked_by:
+            self.log.insert("end", f"  blocked by {page.blocked_by}", "error")
+        self.log.insert("end", "\n")
         self.log.see("end")
         self.progress.step(1)
 

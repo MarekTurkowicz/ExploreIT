@@ -11,7 +11,6 @@ from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
-from pydantic import ValidationError
 
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
@@ -108,7 +107,7 @@ class ExperimentsTab(ttk.Frame):
             return
         try:
             base = self.app.crawl_tab.read_config()
-        except ValidationError as error:
+        except ValueError as error:
             messagebox.showerror("Check the Crawl tab", describe_errors(error))
             return
         chosen = [_ticked(ticks) for ticks in (self.strategies, self.scopes, self.link_modes)]

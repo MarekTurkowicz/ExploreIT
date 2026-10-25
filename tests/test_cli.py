@@ -177,3 +177,24 @@ def test_store_rejects_long_separator(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "single character" in result.output
+
+
+def test_crawl_command_reports_blocked_pages(respx_mock: respx.MockRouter, tmp_path: Path) -> None:
+    route = respx_mock.get("https://example.com/").respond(403, headers={"x-dd-b": "2"})
+
+    args = ["crawl", "https://example.com", "--delay", "0", "--ignore-robots"]
+    args += ["--user-agent", "Test/1", "--header", "Accept-Language: pl"]
+    result = runner.invoke(app, [*args, "-o", str(tmp_path / "c.json")])
+
+    assert result.exit_code == 0, result.output
+    assert "blocked by DataDome" in result.output
+    assert route.calls.last.request.headers["Accept-Language"] == "pl"
+    saved = CrawlResult.load(tmp_path / "c.json")
+    assert saved.pages[0].blocked_by == "DataDome"
+    assert saved.config.user_agent == "Test/1"
+
+
+def test_crawl_command_rejects_bad_header() -> None:
+    result = runner.invoke(app, ["crawl", "https://example.com", "--header", "nocolon"])
+
+    assert result.exit_code == 2

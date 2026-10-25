@@ -61,7 +61,11 @@ def crawl(
     stopped = False
 
     with Fetcher(
-        delay=config.delay, timeout=config.timeout, respect_robots=config.respect_robots
+        delay=config.delay,
+        timeout=config.timeout,
+        respect_robots=config.respect_robots,
+        user_agent=config.user_agent,
+        headers=config.headers,
     ) as fetcher:
         while frontier and len(pages) < config.max_pages:
             if should_stop():
@@ -85,6 +89,7 @@ def crawl(
                 depth=depth,
                 status_code=page.status_code,
                 content_type=page.content_type,
+                blocked_by=page.blocked_by,
             )
             pages.append(crawled)
             on_page(crawled)

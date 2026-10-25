@@ -13,7 +13,7 @@ from rich.table import Table
 
 from exploreit import __version__
 from exploreit.compare import comparison_rows
-from exploreit.config import CrawlConfig
+from exploreit.config import CrawlConfig, parse_headers
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.experiments import (
     CHART_FILE,
@@ -27,6 +27,7 @@ from exploreit.experiments import (
     save_comparison,
 )
 from exploreit.export import write_gexf, write_html
+from exploreit.fetcher import USER_AGENT
 from exploreit.frontier import Strategy
 from exploreit.graph import compute_stats
 from exploreit.models import CrawledPage
@@ -42,6 +43,16 @@ MaxDepth = Annotated[int, typer.Option(help="Deepest level to visit (0 = start p
 MaxPages = Annotated[int, typer.Option(help="Stop a crawl after this many pages.")]
 Delay = Annotated[float, typer.Option(help="Seconds between requests to the same host.")]
 IgnoreRobots = Annotated[bool, typer.Option("--ignore-robots", help="Do not check robots.txt.")]
+UserAgent = Annotated[str, typer.Option(help="User-Agent sent with every request.")]
+Headers = Annotated[
+    list[str],
+    typer.Option(
+        "--header",
+        default_factory=list,
+        help="Extra request header 'Name: value'. Repeat for more. "
+        "This does not get past anti-bot services such as DataDome or Cloudflare.",
+    ),
+]
 CrawlFile = Annotated[
     Path, typer.Argument(exists=True, dir_okay=False, help="A crawl result (JSON).")
 ]
@@ -73,6 +84,7 @@ def ui(
 @app.command("crawl")
 def crawl_command(
     start_url: Annotated[str, typer.Argument(help="URL to start crawling from.")],
+    header: Headers,
     strategy: Annotated[Strategy, typer.Option(help="Order of visiting pages.")] = Strategy.BFS,
     scope: Annotated[Scope, typer.Option(help="How far from the start URL to go.")] = Scope.SERVER,
     links: Annotated[LinkMode, typer.Option(help="Which links to follow.")] = LinkMode.HYPERLINKS,
@@ -80,6 +92,7 @@ def crawl_command(
     max_pages: MaxPages = 100,
     delay: Delay = 1.0,
     ignore_robots: IgnoreRobots = False,
+    user_agent: UserAgent = USER_AGENT,
     content: Annotated[
         bool, typer.Option("--content", help="Also keep title, meta tags and body text.")
     ] = False,
@@ -99,6 +112,8 @@ def crawl_command(
             delay=delay,
             respect_robots=not ignore_robots,
             store_content=content,
+            user_agent=user_agent,
+            headers=_headers(header),
         )
     )
     result = crawl(config, on_page=_print_page)
@@ -272,6 +287,13 @@ def diff(first: CrawlFile, second: CrawlFile) -> None:
     console.print(table)
 
 
+def _headers(lines: list[str]) -> dict[str, str]:
+    try:
+        return parse_headers(lines)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--header") from error
+
+
 def _validated[T](build: Callable[[], T]) -> T:
     """Build a config, turning validation errors into readable messages and exit code 2."""
     try:
@@ -285,8 +307,10 @@ def _validated[T](build: Callable[[], T]) -> T:
 
 def _print_page(page: CrawledPage) -> None:
     colour = "green" if page.status_code < 400 else "red"
+    blocked = f" [red]blocked by {page.blocked_by}[/]" if page.blocked_by else ""
     console.print(
-        f"[dim]{page.depth}[/] [{colour}]{page.status_code}[/] {escape(page.url)}", soft_wrap=True
+        f"[dim]{page.depth}[/] [{colour}]{page.status_code}[/] {escape(page.url)}{blocked}",
+        soft_wrap=True,
     )
 
 

@@ -33,6 +33,7 @@ class Page(BaseModel):
     status_code: int
     content_type: str
     html: str = ""
+    blocked_by: str = ""  # anti-bot service that refused the request, e.g. "DataDome"
 
 
 class CrawledPage(BaseModel):
@@ -44,6 +45,7 @@ class CrawledPage(BaseModel):
     depth: int
     status_code: int
     content_type: str
+    blocked_by: str = ""
 
     @property
     def is_html(self) -> bool:

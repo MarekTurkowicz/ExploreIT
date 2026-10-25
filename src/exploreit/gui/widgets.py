@@ -177,8 +177,11 @@ def timestamp() -> str:
     return f"{datetime.now():%Y%m%d-%H%M%S}"
 
 
-def describe_errors(error: ValidationError) -> str:
-    return "\n".join(f"{problem['loc'][0]}: {problem['msg']}" for problem in error.errors())
+def describe_errors(error: ValueError) -> str:
+    """Readable text for a pydantic validation error or any other ValueError."""
+    if isinstance(error, ValidationError):
+        return "\n".join(f"{problem['loc'][0]}: {problem['msg']}" for problem in error.errors())
+    return str(error)
 
 
 def show_error(error: Exception) -> None:

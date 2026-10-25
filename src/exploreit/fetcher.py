@@ -2,7 +2,8 @@
 
 import math
 import time
-from types import TracebackType
+from collections.abc import Mapping
+from types import MappingProxyType, TracebackType
 from typing import Self
 from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
@@ -19,6 +20,11 @@ ALLOW_ALL: list[str] = []
 DISALLOW_ALL = ["User-agent: *", "Disallow: /"]
 
 
+BLOCK_STATUSES = frozenset({401, 403, 429, 503})
+NO_HEADERS: Mapping[str, str] = MappingProxyType({})
+MAX_BLOCK_PAGE_BYTES = 200_000
+
+
 class FetchError(Exception):
     """Raised when a page cannot be fetched or robots.txt forbids it."""
 
@@ -33,12 +39,15 @@ class Fetcher:
         timeout: float = 10.0,
         respect_robots: bool = True,
         user_agent: str = USER_AGENT,
+        headers: Mapping[str, str] = NO_HEADERS,
     ) -> None:
         self.delay = delay
         self.respect_robots = respect_robots
         self.user_agent = user_agent
         self._client = httpx.Client(
-            headers={"User-Agent": user_agent}, timeout=timeout, follow_redirects=True
+            headers={**headers, "User-Agent": user_agent},
+            timeout=timeout,
+            follow_redirects=True,
         )
         self._robots: dict[str, RobotFileParser] = {}
         self._last_request: dict[str, float] = {}
@@ -70,10 +79,12 @@ class Fetcher:
         try:
             with self._client.stream("GET", url) as response:
                 content_type = _media_type(response.headers.get("content-type", ""))
-                html = ""
+                html = blocked_by = ""
                 if response.is_success and content_type in HTML_TYPES:
                     response.read()
                     html = _decode(response)
+                elif response.status_code in BLOCK_STATUSES:
+                    blocked_by = bot_protection(response.headers, _read_some(response))
         except (httpx.HTTPError, httpx.InvalidURL) as error:
             raise FetchError(f"cannot fetch {url}: {error}") from error
 
@@ -82,6 +93,7 @@ class Fetcher:
             status_code=response.status_code,
             content_type=content_type,
             html=html,
+            blocked_by=blocked_by,
         )
 
     def is_allowed(self, url: str) -> bool:
@@ -121,6 +133,42 @@ class Fetcher:
         if elapsed < self.delay:
             time.sleep(self.delay - elapsed)
         self._last_request[host] = time.monotonic()
+
+
+def bot_protection(headers: Mapping[str, str], body: str) -> str:
+    """Name the anti-bot service behind a refused response, or "" if none is recognised.
+
+    These services decide from much more than headers (TLS fingerprint, a JavaScript
+    challenge, IP reputation), so a crawler cannot and should not talk its way past them.
+    """
+    lower = {name.lower(): value.lower() for name, value in headers.items()}
+    text = body.lower()
+    if "x-datadome" in lower or "x-dd-b" in lower or "captcha-delivery.com" in text:
+        return "DataDome"
+    if (
+        "cf-mitigated" in lower
+        or "challenge-platform" in text
+        or (lower.get("server") == "cloudflare" and "just a moment" in text)
+    ):
+        return "Cloudflare"
+    if "akamaighost" in lower.get("server", "") or "_abck" in lower.get("set-cookie", ""):
+        return "Akamai"
+    if "x-iinfo" in lower or "incapsula" in text:
+        return "Imperva"
+    if "captcha" in text:
+        return "a CAPTCHA"
+    return ""
+
+
+def _read_some(response: httpx.Response) -> str:
+    """The start of a body, enough to recognise a block page without downloading much."""
+    chunks, size = [], 0
+    for chunk in response.iter_bytes():
+        chunks.append(chunk)
+        size += len(chunk)
+        if size >= MAX_BLOCK_PAGE_BYTES:
+            break
+    return b"".join(chunks).decode("utf-8", errors="replace")
 
 
 def _decode(response: httpx.Response) -> str:
