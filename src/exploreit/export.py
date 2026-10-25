@@ -7,11 +7,13 @@ import json
 from collections import Counter
 from pathlib import Path
 from string import Template
-
-import networkx as nx
+from typing import TYPE_CHECKING
 
 from exploreit.crawler import CrawlResult
 from exploreit.graph import shortest_levels
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 # Pinned so the page keeps working the same way; loaded from a CDN when the page opens.
 VIS_NETWORK = "https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"
@@ -64,6 +66,8 @@ def build_graph(result: CrawlResult, visited_only: bool = True) -> nx.DiGraph[st
     Nodes carry `level`, `status_code`, `content_type` and `visited`; edges carry `kind`.
     With visited_only, links to pages that were never fetched are left out.
     """
+    import networkx as nx  # imported here: it is slow to load and only needed now
+
     levels = shortest_levels(result)
     graph: nx.DiGraph[str] = nx.DiGraph()
     for page in result.pages:
@@ -87,6 +91,8 @@ def build_graph(result: CrawlResult, visited_only: bool = True) -> nx.DiGraph[st
 
 def write_gexf(result: CrawlResult, path: Path) -> None:
     """Save the full link graph, including unvisited targets, for Gephi."""
+    import networkx as nx
+
     path.parent.mkdir(parents=True, exist_ok=True)
     nx.write_gexf(build_graph(result, visited_only=False), path)
 

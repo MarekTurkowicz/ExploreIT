@@ -27,7 +27,6 @@ from exploreit.gui.graph_model import (
     radius,
     short_label,
 )
-from exploreit.plots import network_figure, save_figure
 
 if TYPE_CHECKING:
     from exploreit.gui.app import ExploreApp
@@ -154,6 +153,8 @@ class GraphTab(ttk.Frame):
     def save_png(self) -> None:
         if not hasattr(self, "result"):
             return
+        from exploreit.plots import network_figure, save_figure
+
         style = self.canvas.style
         hosts = hosts_by_frequency(self.data)
         nodes = self.data.nodes

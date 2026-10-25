@@ -1,18 +1,21 @@
 """Crawl one site with every combination of parameters and compare the results."""
 
+from __future__ import annotations
+
 from collections.abc import Callable, Iterable
 from itertools import product
 from pathlib import Path
-
-import pandas as pd
+from typing import TYPE_CHECKING
 
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
 from exploreit.parser import LinkMode
-from exploreit.plots import comparison_figure, save_figure
 from exploreit.urls import Scope
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 PARAMETERS = ["strategy", "scope", "link_mode"]
 SUMMARY_COLUMNS = [
@@ -92,6 +95,8 @@ def comparison_table(results: Iterable[CrawlResult]) -> pd.DataFrame:
                 **stats,
             }
         )
+    import pandas as pd  # slow to load, so only when a table is built
+
     return pd.DataFrame(rows, columns=[*PARAMETERS, *GraphStats.model_fields])
 
 
@@ -101,6 +106,8 @@ def save_comparison(results: Iterable[CrawlResult], directory: Path) -> pd.DataF
     Raises:
         ValueError: If there are no results to compare.
     """
+    from exploreit.plots import comparison_figure, save_figure
+
     table = comparison_table(results)
     if table.empty:
         raise ValueError(f"no crawl results in {directory}")

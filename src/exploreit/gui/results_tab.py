@@ -17,7 +17,6 @@ from exploreit.crawler import CrawlResult
 from exploreit.export import write_gexf, write_html
 from exploreit.graph import click_tree, compute_stats, shortest_levels
 from exploreit.gui.widgets import ChartPanel, Table
-from exploreit.plots import levels_figure, out_links_figure, save_figure
 from exploreit.storage import write_csv, write_sqlite
 
 if TYPE_CHECKING:
@@ -79,6 +78,8 @@ class ResultsTab(ttk.Frame):
         self.result, self.crawl_file = result, path
         self.file_label.configure(text=str(path))
         self.stats.set_rows(["Metric", "Value"], compute_stats(result).summary(), widths=[190])
+        from exploreit.plots import levels_figure
+
         self.levels_chart.show(levels_figure(result))
         self._fill_tree(result)
         for button in self.actions:
@@ -95,6 +96,8 @@ class ResultsTab(ttk.Frame):
         self.app.set_status(f"Saved {gexf_file}")
 
     def save_charts(self) -> None:
+        from exploreit.plots import levels_figure, out_links_figure, save_figure
+
         paths = []
         for suffix, figure in (("levels", levels_figure), ("out-links", out_links_figure)):
             path = self.crawl_file.with_name(f"{self.crawl_file.stem}-{suffix}.png")

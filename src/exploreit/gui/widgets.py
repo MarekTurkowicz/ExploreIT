@@ -12,10 +12,13 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from tkinter import messagebox, ttk
+from typing import TYPE_CHECKING
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
 
 POLL_MS = 50
 COLLECT_EVERY_S = 2.0
@@ -154,6 +157,8 @@ class ChartPanel(ttk.Frame):
         # The old chart holds Tk images that may only be freed in this thread. Collect it
         # now, or Python may free it later in a worker thread and Tk would complain.
         gc.collect()
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
         canvas = FigureCanvasTkAgg(figure, master=self)
         if self.toolbar:
             NavigationToolbar2Tk(canvas, self, pack_toolbar=False).pack(side="bottom", fill="x")

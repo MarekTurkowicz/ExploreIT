@@ -173,6 +173,14 @@ class ExploreApp:
         self.set_status(f"{len(result.pages)} pages, {len(result.edges)} links · {path}")
 
 
+def _warm_up() -> None:
+    """Import the libraries the charts and the graph need, so their first use is quick."""
+    import importlib
+
+    for module in ("matplotlib.figure", "networkx", "pandas", "scipy.sparse"):
+        importlib.import_module(module)
+
+
 def _all_widgets[W: tk.Misc](parent: tk.Misc, kind: type[W]) -> list[W]:
     found: list[W] = []
     for child in parent.winfo_children():
@@ -190,9 +198,11 @@ def create_window(data_dir: Path = Path("data")) -> tuple[tb.Window, ExploreApp]
 
 def run_app(data_dir: Path = Path("data")) -> None:
     """Open the ExploreIT window in front of other windows and run until it is closed."""
-    root, _ = create_window(data_dir)
+    root, app = create_window(data_dir)
     root.lift()
     root.attributes("-topmost", True)
     root.after(800, lambda: root.attributes("-topmost", False))
     root.focus_force()
+    # Show the window first, then load the slow libraries while the user looks around.
+    root.after(300, lambda: app.tasks.run(_warm_up, lambda _: None))
     root.mainloop()

@@ -29,10 +29,8 @@ from exploreit.experiments import (
 from exploreit.export import write_gexf, write_html
 from exploreit.frontier import Strategy
 from exploreit.graph import compute_stats
-from exploreit.gui import run_app
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
-from exploreit.plots import levels_figure, out_links_figure, save_figure
 from exploreit.storage import ContentField, write_csv, write_sqlite
 from exploreit.urls import Scope
 
@@ -67,6 +65,8 @@ def ui(
     ),
 ) -> None:
     """Open the desktop application."""
+    from exploreit.gui import run_app  # Tk and the charts load only for this command
+
     run_app(data_dir)
 
 
@@ -142,6 +142,8 @@ def graph(
 @app.command()
 def plots(crawl_file: CrawlFile = Path("data/crawl.json")) -> None:
     """Save PNG charts of a crawl next to the crawl file."""
+    from exploreit.plots import levels_figure, out_links_figure, save_figure
+
     result = CrawlResult.load(crawl_file)
     for suffix, figure in (("levels", levels_figure), ("out-links", out_links_figure)):
         path = crawl_file.with_name(f"{crawl_file.stem}-{suffix}.png")

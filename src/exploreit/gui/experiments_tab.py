@@ -10,7 +10,6 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
-import pandas as pd
 import ttkbootstrap as tb
 from pydantic import ValidationError
 
@@ -27,10 +26,11 @@ from exploreit.frontier import Strategy
 from exploreit.graph import format_duration
 from exploreit.gui.widgets import ChartPanel, Table, describe_errors, show_error, timestamp
 from exploreit.parser import LinkMode
-from exploreit.plots import comparison_figure
 from exploreit.urls import Scope
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from exploreit.gui.app import ExploreApp
 
 SHARED_SETTINGS = {"max_depth", "max_pages", "delay", "timeout", "respect_robots"}
@@ -172,6 +172,8 @@ class ExperimentsTab(ttk.Frame):
             for row in table[SUMMARY_COLUMNS].itertuples(index=False)
         )
         self.table.set_rows([c.replace("_", " ") for c in SUMMARY_COLUMNS], rows, widths=[90] * 11)
+        from exploreit.plots import comparison_figure
+
         self.chart.show(comparison_figure(table))
         self.app.set_status(f"Experiments saved to {out_dir} (summary.csv, comparison.png)")
 

@@ -11,8 +11,6 @@ from enum import StrEnum
 from math import sqrt
 from urllib.parse import urlsplit
 
-import networkx as nx
-
 from exploreit.crawler import CrawlResult
 from exploreit.export import LEVEL_COLOURS, build_graph
 
@@ -98,6 +96,8 @@ def positions(data: GraphData, layout: Layout) -> dict[str, tuple[float, float]]
     rows = _rows(data)
     if layout is Layout.LEVELS:
         return _columns_by_level(data, rows)
+    import networkx as nx  # slow to load, so only when a layout is computed
+
     graph: nx.Graph[str] = nx.Graph()
     graph.add_nodes_from(data.nodes)
     graph.add_edges_from(data.edges)
