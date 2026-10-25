@@ -29,7 +29,7 @@ from exploreit.experiments import (
 from exploreit.export import write_gexf, write_html
 from exploreit.frontier import Strategy
 from exploreit.graph import compute_stats
-from exploreit.gui import run_app
+from exploreit.gui.app import run_app
 from exploreit.models import CrawledPage
 from exploreit.parser import LinkMode
 from exploreit.plots import levels_figure, out_links_figure, save_figure
