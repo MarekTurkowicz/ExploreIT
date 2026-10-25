@@ -76,7 +76,7 @@ def ui(
     ),
 ) -> None:
     """Open the desktop application."""
-    from exploreit.gui import run_app  # Tk and the charts load only for this command
+    from exploreit.gui.app import run_app  # Tk and the charts load only for this command
 
     run_app(data_dir)
 

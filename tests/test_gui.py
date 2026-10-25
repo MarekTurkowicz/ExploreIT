@@ -5,12 +5,13 @@ from pathlib import Path
 from tkinter import ttk
 
 import pytest
+
+pytest.importorskip("tkinter", reason="this Python has no Tk")
 import respx
 
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
-from exploreit.gui import ExploreApp
-from exploreit.gui.app import DARK_THEME, create_window
+from exploreit.gui.app import DARK_THEME, ExploreApp, create_window
 from exploreit.gui.widgets import Table
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
 from exploreit.storage import ContentField
