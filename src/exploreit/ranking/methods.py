@@ -13,10 +13,12 @@ from pathlib import Path
 
 import numpy as np
 
+from exploreit.ranking.bridges import betweenness
 from exploreit.ranking.eigen import leading_eigenvector
 from exploreit.ranking.graph import LinkGraph
-from exploreit.ranking.matrix import adjacency_matrix, short_labels
+from exploreit.ranking.matrix import adjacency_matrix, short_labels, trusted_matrix
 from exploreit.ranking.prestige import Dangling, Normalization, prestige
+from exploreit.ranking.words import word_cascade
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,10 @@ class Settings:
     smoothing: float = 0.0
     tolerance: float = 1e-6
     max_iterations: int = 200
+    cascade_words: int = 10  # words in the first round of the word cascade
+    weight_links: float = 0.5  # parts of ExploreIT rank
+    weight_text: float = 0.3
+    weight_bridges: float = 0.2
 
 
 DEFAULT_SETTINGS = Settings()
@@ -114,6 +120,43 @@ def _eigenvector(graph: LinkGraph, settings: Settings) -> Scores:
     return Scores(result.vector, result.iterations, result.converged)
 
 
+def _trusted_prestige(graph: LinkGraph, settings: Settings) -> Scores:
+    result = prestige(
+        trusted_matrix(graph),
+        graph.pages,
+        normalization=settings.normalization,
+        dangling=Dangling.SPREAD,  # a page without links out shares its vote with everyone
+        smoothing=max(settings.smoothing, 0.15),  # never swap back and forth
+        tolerance=settings.tolerance,
+        max_iterations=settings.max_iterations,
+    )
+    return Scores(result.scores, result.iterations, result.converged, result.history)
+
+
+def _word_cascade(graph: LinkGraph, settings: Settings) -> Scores:
+    return Scores(word_cascade(graph.pages, graph.texts, settings.cascade_words).scores)
+
+
+def _bridges(graph: LinkGraph, _: Settings) -> Scores:
+    return Scores(betweenness(graph))
+
+
+def _explore_rank(graph: LinkGraph, settings: Settings) -> Scores:
+    """Trusted links, the word cascade and bridges, each scaled to 0..1, then mixed."""
+    links = _trusted_prestige(graph, settings)
+    parts = [
+        (settings.weight_links, links.values),
+        (settings.weight_text, _word_cascade(graph, settings).values),
+        (settings.weight_bridges, betweenness(graph)),
+    ]
+    # Without stored content the text part is all zeros; its weight then goes unused.
+    used = [(weight, values) for weight, values in parts if weight > 0 and values.max() > 0]
+    total = sum(weight for weight, _ in used) or 1.0
+    combined = sum(weight / total * values / values.max() for weight, values in used)
+    values = np.asarray(combined, dtype=float) if used else np.zeros(len(graph.pages))
+    return Scores(values, links.iterations, links.converged, links.history)
+
+
 METHODS = [
     Method("links in", "Number of pages linking to the page (a simple baseline).", _links_in),
     Method("prestige", "p(u) = sum of A(v,u) p(v) on the adjacency matrix.", _prestige(False)),
@@ -127,7 +170,27 @@ METHODS = [
         "Eigenvector of the largest eigenvalue of the adjacency matrix (power method).",
         _eigenvector,
     ),
+    Method(
+        "trusted prestige",
+        "Weighted prestige where mutual links and menu links count less (spam resistance).",
+        _trusted_prestige,
+    ),
+    Method(
+        "word cascade",
+        "Pages using most of the site's most repeated words, round by round (needs content).",
+        _word_cascade,
+    ),
+    Method("bridges", "Share of shortest paths between other pages passing through.", _bridges),
+    Method(
+        "ExploreIT rank",
+        "Trusted prestige + word cascade + bridges, mixed by the chosen weights.",
+        _explore_rank,
+    ),
 ]
+
+
+def format_tau(tau: float) -> str:
+    return "n/a" if np.isnan(tau) else f"{tau:.3f}"
 
 
 def write_ranking_csv(comparison: Comparison, path: Path) -> None:
@@ -178,7 +241,8 @@ def kendall_tau(first: np.ndarray, second: np.ndarray) -> float:
     """Kendall's tau-b: how often two rankings put a pair of pages in the same order.
 
     Counts concordant and discordant pairs and corrects for ties, so methods that give
-    many pages the same score are not penalised for it.
+    many pages the same score are not penalised for it. When one method gives every page
+    the same score there is no order to compare and the result is NaN.
     """
     concordant = discordant = ties_first = ties_second = 0
     for i, j in combinations(range(len(first)), 2):
@@ -197,4 +261,4 @@ def kendall_tau(first: np.ndarray, second: np.ndarray) -> float:
     denominator = np.sqrt(
         (concordant + discordant + ties_first) * (concordant + discordant + ties_second)
     )
-    return float((concordant - discordant) / denominator) if denominator else 1.0
+    return float((concordant - discordant) / denominator) if denominator else float("nan")

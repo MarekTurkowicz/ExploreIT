@@ -245,6 +245,12 @@ def rank(
     ] = 0.0,
     max_iterations: Annotated[int, typer.Option(min=1, help="Stop after this many steps.")] = 200,
     top: Annotated[int, typer.Option(min=1, help="How many pages to list.")] = 20,
+    words: Annotated[
+        int, typer.Option(min=1, help="Words in the first round of the word cascade.")
+    ] = 10,
+    weight_links: Annotated[float, typer.Option(min=0, help="ExploreIT rank: links.")] = 0.5,
+    weight_text: Annotated[float, typer.Option(min=0, help="ExploreIT rank: text.")] = 0.3,
+    weight_bridges: Annotated[float, typer.Option(min=0, help="ExploreIT rank: bridges.")] = 0.2,
 ) -> None:
     """Rank the pages of a crawl by their links with every method and compare them.
 
@@ -258,7 +264,7 @@ def rank(
         write_legend_csv,
         write_matrix_csv,
     )
-    from exploreit.ranking.methods import Settings, compare, write_ranking_csv
+    from exploreit.ranking.methods import Settings, compare, format_tau, write_ranking_csv
 
     graph = link_graph(CrawlResult.load(crawl_file))
     labels = dict(zip(graph.pages, short_labels(graph), strict=True))
@@ -278,7 +284,13 @@ def rank(
         dangling=dangling,
         smoothing=smoothing,
         max_iterations=max_iterations,
+        cascade_words=words,
+        weight_links=weight_links,
+        weight_text=weight_text,
+        weight_bridges=weight_bridges,
     )
+    if not graph.texts:
+        console.print("[yellow]No page content in this crawl:[/] the word cascade is empty.")
     comparison = compare(graph, settings)
     methods = Table(title="Methods")
     for column in ("method", "iterations", "settled", "ms"):
@@ -306,7 +318,7 @@ def rank(
     agreement.add_column("methods")
     agreement.add_column("tau", justify="right")
     for first, second, tau in comparison.agreement():
-        agreement.add_row(f"{first} vs {second}", f"{tau:.3f}")
+        agreement.add_row(f"{first} vs {second}", format_tau(tau))
     console.print(agreement)
 
     stem = crawl_file.with_name(crawl_file.stem)

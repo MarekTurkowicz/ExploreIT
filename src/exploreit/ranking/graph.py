@@ -1,7 +1,8 @@
 """The link graph that pages are ranked on, and the checks it has to pass."""
 
 from collections import Counter, deque
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from functools import cached_property
 
 from pydantic import BaseModel
@@ -22,6 +23,8 @@ class LinkGraph:
 
     pages: tuple[str, ...]
     links: tuple[tuple[str, str], ...]
+    # Title, description, keywords and body of every page, when the crawl kept content.
+    texts: Mapping[str, str] = field(default_factory=dict)
 
     @cached_property
     def out_links(self) -> dict[str, list[str]]:
@@ -63,7 +66,14 @@ def link_graph(result: CrawlResult, html_only: bool = True) -> LinkGraph:
             if edge.source in known and edge.target in known and edge.source != edge.target
         )
     )
-    return LinkGraph(pages, links)
+    texts = {
+        content.url: " ".join(
+            [content.title, content.description, " ".join(content.keywords), content.body]
+        )
+        for content in result.contents
+        if content.url in known
+    }
+    return LinkGraph(pages, links, texts)
 
 
 def check_requirements(graph: LinkGraph) -> list[Requirement]:

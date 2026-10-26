@@ -14,6 +14,7 @@ from exploreit.crawler import CrawlResult
 from exploreit.gui.app import DARK_THEME, ExploreApp, create_window
 from exploreit.gui.widgets import Table
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
+from exploreit.ranking.methods import METHODS
 from exploreit.storage import ContentField
 
 SITE = "https://example.com"
@@ -347,7 +348,7 @@ def test_ranking_tab_ranks_and_shows_prestige_on_the_graph(app: ExploreApp, tmp_
 
     assert len(tab.table.rows()) == 6
     assert tab.table.rows()[0][0] == "P1"  # page 0 gets the most links
-    assert len(tab.agreement.rows()) == 6
+    assert len(tab.agreement.rows()) == len(METHODS) * (len(METHODS) - 1) // 2
     tab.on_graph.set("weighted prestige")
     tab.show_on_graph()
     settle(app)

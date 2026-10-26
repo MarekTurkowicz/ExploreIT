@@ -32,7 +32,7 @@ def test_every_method_ranks_every_page() -> None:
     hub = next(row for row in comparison.table() if row[0] == "hub")
     # Every method but the weighted one puts hub first. In the weighted matrix hub gives
     # its whole vote to its only link, a, which therefore overtakes it.
-    assert hub[1] == [1, 1, 2, 1]
+    assert hub[1][:4] == [1, 1, 2, 1]  # the four methods from the task
     a = next(row for row in comparison.table() if row[0] == "a")
     assert a[1][2] == 1
 
@@ -73,10 +73,12 @@ def test_kendall_tau_extremes() -> None:
 
     assert kendall_tau(values, values) == pytest.approx(1)
     assert kendall_tau(values, -values) == pytest.approx(-1)
+    assert np.isnan(kendall_tau(values, np.zeros(3)))  # no order to compare with
 
 
 def test_agreement_lists_every_pair_of_methods() -> None:
     pairs = compare(GRAPH, Settings(smoothing=0.3, max_iterations=500)).agreement()
 
-    assert len(pairs) == 6  # 4 methods
-    assert all(-1 <= tau <= 1 for _, _, tau in pairs)
+    assert len(pairs) == len(METHODS) * (len(METHODS) - 1) // 2
+    # No page content in this graph, so the word cascade has no order to compare: NaN.
+    assert all(np.isnan(tau) or -1 <= tau <= 1 for _, _, tau in pairs)

@@ -18,11 +18,20 @@ from exploreit.ranking.matrix import (
     write_legend_csv,
     write_matrix_csv,
 )
-from exploreit.ranking.methods import METHODS, Comparison, Settings, compare, write_ranking_csv
+from exploreit.ranking.methods import (
+    METHODS,
+    Comparison,
+    Settings,
+    compare,
+    format_tau,
+    write_ranking_csv,
+)
 from exploreit.ranking.prestige import Dangling, Normalization
 
 if TYPE_CHECKING:
     from exploreit.gui.app import ExploreApp
+
+WEIGHTS = {"links": "0.5", "text": "0.3", "bridges": "0.2"}
 
 
 class RankingTab(ttk.Frame):
@@ -41,7 +50,9 @@ class RankingTab(ttk.Frame):
         self.dangling = tk.StringVar(value=Dangling.LOST)
         self.smoothing = tk.StringVar(value="0.0")
         self.max_iterations = tk.StringVar(value="200")
-        self.on_graph = tk.StringVar(value=METHODS[1].name)
+        self.on_graph = tk.StringVar(value=METHODS[-1].name)
+        self.cascade_words = tk.StringVar(value="10")
+        self.weights = {part: tk.StringVar(value=value) for part, value in WEIGHTS.items()}
         self._build()
 
     def _build(self) -> None:
@@ -79,6 +90,18 @@ class RankingTab(ttk.Frame):
             foreground="#898781",
         ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
+        own = ttk.LabelFrame(top, text="ExploreIT rank (own method)", padding=10)
+        own.pack(side="left", fill="both", padx=(12, 0))
+        ttk.Label(own, text="Words in round 1").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Spinbox(own, textvariable=self.cascade_words, from_=1, to=50, width=5).grid(
+            row=0, column=1, sticky="w", padx=8
+        )
+        for row, (part, variable) in enumerate(self.weights.items(), start=1):
+            ttk.Label(own, text=f"Weight of {part}").grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Spinbox(own, textvariable=variable, from_=0, to=1, increment=0.1, width=5).grid(
+                row=row, column=1, sticky="w", padx=8
+            )
+
         actions = ttk.Frame(self)
         actions.pack(fill="x", pady=10)
         self.compute_button = tb.Button(
@@ -103,18 +126,18 @@ class RankingTab(ttk.Frame):
             button.pack(side="left", padx=(8, 0))
             button.state(["disabled"])
 
-        panes = ttk.PanedWindow(self, orient="horizontal")
+        panes = ttk.PanedWindow(self, orient="vertical")
         panes.pack(fill="both", expand=True)
-        self.table = Table(panes, height=10)
+        self.table = Table(panes, height=8)
         panes.add(self.table, weight=3)
-        side = ttk.Frame(panes)
-        self.methods_table = Table(side, height=4)
-        self.methods_table.pack(fill="x")
-        self.agreement = Table(side, height=4)
-        self.agreement.pack(fill="x", pady=(10, 0))
-        self.chart = ChartPanel(side)
-        self.chart.pack(fill="both", expand=True, pady=(10, 0))
-        panes.add(side, weight=2)
+        below = ttk.Frame(panes)
+        self.methods_table = Table(below, height=8)
+        self.methods_table.pack(side="left", fill="y")
+        self.agreement = Table(below, height=8)
+        self.agreement.pack(side="left", fill="y", padx=10)
+        self.chart = ChartPanel(below)
+        self.chart.pack(side="left", fill="both", expand=True)
+        panes.add(below, weight=2)
 
     def show(self, result: CrawlResult, path: Path) -> None:
         self.result, self.crawl_file = result, path
@@ -136,11 +159,18 @@ class RankingTab(ttk.Frame):
         smoothing = float(self.smoothing.get())
         if not 0 <= smoothing < 1:
             raise ValueError("Smoothing must be at least 0 and less than 1.")
+        weights = {part: float(variable.get()) for part, variable in self.weights.items()}
+        if any(weight < 0 for weight in weights.values()):
+            raise ValueError("Weights cannot be negative.")
         return Settings(
             normalization=Normalization(self.normalization.get()),
             dangling=Dangling(self.dangling.get()),
             smoothing=smoothing,
             max_iterations=max(1, int(self.max_iterations.get())),
+            cascade_words=max(1, int(self.cascade_words.get())),
+            weight_links=weights["links"],
+            weight_text=weights["text"],
+            weight_bridges=weights["bridges"],
         )
 
     def compute(self) -> None:
@@ -172,7 +202,7 @@ class RankingTab(ttk.Frame):
                 ]
                 for page, pl, sc in comparison.table()
             ),
-            widths=[50, 240, *([120] * len(names))],
+            widths=[50, 200, *([95] * len(names))],
         )
         self.methods_table.set_rows(
             ["Method", "Iterations", "Settled", "Time (ms)"],
@@ -189,7 +219,7 @@ class RankingTab(ttk.Frame):
         )
         self.agreement.set_rows(
             ["Methods compared", "Kendall tau"],
-            ([f"{a} vs {b}", f"{tau:.3f}"] for a, b, tau in comparison.agreement()),
+            ([f"{a} vs {b}", format_tau(tau)] for a, b, tau in comparison.agreement()),
             widths=[260],
         )
         self.chart.show(
@@ -197,8 +227,11 @@ class RankingTab(ttk.Frame):
                 {result.method.name: result.scores.history for result in comparison.results}
             )
         )
+        note = (
+            "" if self.graph.texts else " This crawl has no saved content: word cascade is empty."
+        )
         self.app.set_status(
-            "Ranked with every method. 'Show' sizes the pages on the Graph tab by prestige."
+            "Ranked with every method. 'Show' sizes the pages on the Graph tab by score." + note
         )
 
     def show_on_graph(self) -> None:

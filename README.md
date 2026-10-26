@@ -12,6 +12,8 @@ as a link graph, stores page content and analyses how crawl parameters affect th
   or GEXF for Gephi
 - Link-based ranking: adjacency matrix, iterative prestige (plain and weighted by outgoing
   links), leading eigenvector, compared with Kendall's tau
+- ExploreIT rank: spam-resistant link prestige combined with a word cascade over page
+  text and bridge pages (betweenness), with adjustable weights
 - Desktop application (Tkinter) and a command line for scripted experiments
 
 ## Requirements

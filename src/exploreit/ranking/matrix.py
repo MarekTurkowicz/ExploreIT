@@ -30,6 +30,30 @@ def adjacency_matrix(graph: LinkGraph, weighted: bool = False) -> Matrix:
     return matrix
 
 
+MUTUAL_LINK_WEIGHT = 0.5  # a link returned by its target counts half
+MENU_LINK_DISCOUNT = 0.9  # a link to a page every page links to keeps a tenth
+
+
+def trusted_matrix(graph: LinkGraph) -> Matrix:
+    """Weighted matrix that resists link spam, rows summing to 1 like 1/Nv.
+
+    Two kinds of links are trusted less before each page shares out its vote:
+    - mutual links (v -> u and u -> v), the classic "link to me and I link to you";
+    - links to pages that nearly every page links to, which are navigation (menus,
+      login, footer) rather than a recommendation: weight 1 - 0.9 * share of pages
+      linking to the target.
+    """
+    matrix = adjacency_matrix(graph)
+    size = max(len(graph.pages), 1)
+    mutual = (matrix > 0) & (matrix.T > 0)
+    matrix = np.where(mutual, matrix * MUTUAL_LINK_WEIGHT, matrix)
+    linked_from = (adjacency_matrix(graph) > 0).sum(axis=0) / size
+    matrix = matrix * (1 - MENU_LINK_DISCOUNT * linked_from)  # scales each column (target)
+    out_links = matrix.sum(axis=1, keepdims=True)
+    result: Matrix = np.divide(matrix, out_links, out=np.zeros_like(matrix), where=out_links > 0)
+    return result
+
+
 def dangling_pages(graph: LinkGraph) -> list[str]:
     """Pages that link to no other page in the graph; their votes go nowhere."""
     return [page for page in graph.pages if not graph.out_links[page]]
