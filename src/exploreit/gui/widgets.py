@@ -7,6 +7,7 @@ import queue
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from functools import partial
@@ -119,12 +120,16 @@ class Table(ttk.Frame):
     def set_rows(
         self, columns: Sequence[str], rows: Iterable[Sequence[object]], widths: Sequence[int] = ()
     ) -> None:
+        """Show the rows; widths are in pixels at 96 DPI and grow to fit each heading."""
         self.tree.delete(*self.tree.get_children())
         self.tree.configure(columns=list(columns))
+        dpi_scale = float(self.tk.call("tk", "scaling")) * 72 / 96
+        heading_font = tkfont.nametofont("TkHeadingFont")
         for index, column in enumerate(columns):
             self.tree.heading(column, text=column, command=partial(self._sort, column))
             width = widths[index] if index < len(widths) else 120
-            self.tree.column(column, width=width, stretch=index == len(columns) - 1)
+            width = max(round(width * dpi_scale), heading_font.measure(column) + 24)
+            self.tree.column(column, width=width, stretch=True)  # all share the spare room
         for row in rows:
             self.tree.insert("", "end", values=[str(value) for value in row])
 
@@ -159,6 +164,7 @@ class ChartPanel(ttk.Frame):
         gc.collect()
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
+        self._match_theme(figure)
         canvas = FigureCanvasTkAgg(figure, master=self)
         if self.toolbar:
             NavigationToolbar2Tk(canvas, self, pack_toolbar=False).pack(side="bottom", fill="x")
@@ -169,6 +175,29 @@ class ChartPanel(ttk.Frame):
         widget.pack(fill="both", expand=True)
         canvas.draw()
         return canvas
+
+    def _match_theme(self, figure: Figure) -> None:
+        """Paint the chart background and text in the window's colours (light or dark)."""
+        from matplotlib.text import Text
+
+        style = ttk.Style(self)
+        background = style.lookup("TFrame", "background") or "white"
+        foreground = style.lookup("TLabel", "foreground") or "black"
+        figure.set_facecolor(background)
+        for text in figure.findobj(Text):
+            text.set_color(foreground)
+        for ax in figure.axes:
+            ax.set_facecolor(background)
+            ax.tick_params(colors=foreground)
+            for spine in ax.spines.values():
+                spine.set_edgecolor(foreground)
+            for line in [*ax.get_xgridlines(), *ax.get_ygridlines()]:
+                line.set_color(foreground)
+                line.set_alpha(0.15)
+        for legend in [*figure.legends, *(ax.get_legend() for ax in figure.axes)]:
+            if legend is not None:
+                legend.get_frame().set_facecolor(background)
+                legend.get_frame().set_edgecolor(background)
 
 
 def saved_crawls(data_dir: Path) -> list[str]:

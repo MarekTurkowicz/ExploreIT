@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 SEPARATORS = {"comma ( , )": ",", "semicolon ( ; )": ";", "tab": "\t"}
 TIMER_MS = 250
+DEFAULT_HEADERS = "Accept-Language: pl-PL,pl;q=0.9,en;q=0.8"
 
 
 class CrawlTab(ttk.Frame):
@@ -111,6 +112,7 @@ class CrawlTab(ttk.Frame):
             row=6, column=0, sticky="nw", pady=6
         )
         self.headers = tk.Text(settings, height=2, relief="flat", borderwidth=6)
+        self.headers.insert("1.0", DEFAULT_HEADERS)
         self.headers.grid(row=6, column=1, columnspan=5, sticky="ew", pady=6)
         ttk.Label(
             settings,

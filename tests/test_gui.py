@@ -199,6 +199,20 @@ def test_settings_are_locked_while_crawling(app: ExploreApp) -> None:
     assert not any(widget.instate(["disabled"]) for widget in app.crawl_tab.inputs)
 
 
+def test_fit_to_screen_shrinks_text_on_a_small_screen(app: ExploreApp) -> None:
+    app.set_font_size(30)
+    app.fit_to_screen(screen=(800, 600))
+
+    assert app.font_size.get() < 30
+
+
+def test_fit_to_screen_keeps_text_on_a_large_screen(app: ExploreApp) -> None:
+    app.set_font_size(12)
+    app.fit_to_screen(screen=(100_000, 100_000))
+
+    assert app.font_size.get() == 12
+
+
 def test_theme_and_font_size(app: ExploreApp) -> None:
     app.dark.set(True)
     app.set_theme(DARK_THEME)

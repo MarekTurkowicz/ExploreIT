@@ -89,6 +89,8 @@ class ExploreApp:
             width=4,
             command=lambda: self.set_font_size(self.font_size.get()),
         )
+        for event in ("<Return>", "<FocusOut>"):  # a typed size, not only the arrows
+            size.bind(event, lambda _: self._apply_typed_size())
         size.pack(side="right")
         ttk.Label(bar, text="Text size").pack(side="right", padx=(0, 6))
 
@@ -116,6 +118,29 @@ class ExploreApp:
     def theme_colours(self) -> Colors:
         colours: Colors = self.root.style.colors
         return colours
+
+    def fit_to_screen(self, screen: tuple[int, int] | None = None) -> None:
+        """Shrink the text until every tab fits on the screen.
+
+        High-DPI screens draw the same point size with more pixels, so the default
+        size can be too big for them.
+        """
+        width, height = screen or (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
+        height = round(height * 0.85)  # room for the taskbar, title bar and some air
+        size = self.font_size.get()
+        while True:
+            self.root.update_idletasks()
+            fits = self.root.winfo_reqwidth() <= width and self.root.winfo_reqheight() <= height
+            if fits or size <= FONT_SIZES[0]:
+                return
+            size -= 1
+            self.set_font_size(size)
+
+    def _apply_typed_size(self) -> None:
+        try:
+            self.set_font_size(self.font_size.get())
+        except tk.TclError:  # not a number
+            self.font_size.set(round(tkfont.nametofont("TkDefaultFont").actual()["size"]))
 
     def set_font_size(self, size: int) -> None:
         size = min(max(size, FONT_SIZES[0]), FONT_SIZES[-1])
@@ -211,6 +236,7 @@ def create_window(data_dir: Path = Path("data")) -> tuple[tb.Window, ExploreApp]
 def run_app(data_dir: Path = Path("data")) -> None:
     """Open the ExploreIT window in front of other windows and run until it is closed."""
     root, app = create_window(data_dir)
+    app.fit_to_screen()
     _maximise(root)
     root.lift()
     root.attributes("-topmost", True)
