@@ -4,6 +4,10 @@ on:
   push:  # every branch, so work in progress is checked too
   pull_request:
 
+env:
+  # Use uv's own Python builds, which include Tk, even when the runner has Python too.
+  UV_PYTHON_PREFERENCE: only-managed
+
 jobs:
   check:
     runs-on: ubuntu-latest

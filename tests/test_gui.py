@@ -5,8 +5,6 @@ from pathlib import Path
 from tkinter import ttk
 
 import pytest
-
-pytest.importorskip("tkinter", reason="this Python has no Tk")
 import respx
 
 from exploreit.config import CrawlConfig
