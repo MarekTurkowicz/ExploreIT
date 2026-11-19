@@ -237,19 +237,21 @@ def test_experiments_need_a_value_in_every_group(app: ExploreApp, errors: list[s
     assert errors == ["Experiments: Tick at least one value in every group."]
 
 
-def test_compare_two_saved_crawls(app: ExploreApp, tmp_path: Path) -> None:
-    save_crawl(tmp_path / "a.json", ["x", "y"])
-    save_crawl(tmp_path / "b.json", [])
+def test_compare_two_csv_databases(app: ExploreApp, tmp_path: Path) -> None:
+    (tmp_path / "a.csv").write_text('url,keywords\nhttps://e.com/,"x, y"\n', encoding="utf-8-sig")
+    (tmp_path / "b.csv").write_text("url;keywords\nhttps://e.com/;\n", encoding="utf-8-sig")
+    (tmp_path / "summary.csv").write_text("strategy,pages\nbfs,3\n", encoding="utf-8")
     tab = app.compare_tab
     tab.refresh()
 
-    tab.first.set("a.json")
-    tab.second.set(str(tmp_path / "b.json"))
+    tab.first.set("a.csv")
+    tab.second.set(str(tmp_path / "b.csv"))
     tab.compare()
 
     rows = {row[0]: row[1:] for row in tab.table.rows()}
     assert rows["Distinct keywords"] == ("2", "0")
-    assert sorted(tab.pickers[0]["values"]) == ["a.json", "b.json"]
+    assert rows["Separator"] == ("comma", "semicolon")
+    assert sorted(tab.pickers[0]["values"]) == ["a.csv", "b.csv"]  # not summary.csv
 
 
 def test_table_sorts_numbers_numerically(app: ExploreApp) -> None:

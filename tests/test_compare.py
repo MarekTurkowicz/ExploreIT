@@ -1,45 +1,72 @@
-from exploreit.compare import summarize, url_overlap
-from exploreit.config import CrawlConfig
-from exploreit.crawler import CrawlResult
-from exploreit.models import PageContent
+from pathlib import Path
 
-START = "https://example.com/"
+import pytest
 
+from exploreit.compare import comparison_rows, load_database
 
-def database(*contents: PageContent) -> CrawlResult:
-    return CrawlResult(
-        config=CrawlConfig(start_url=START), pages=[], edges=[], failed={}, contents=list(contents)
-    )
+A = """url,keywords
+https://example.com/,"love, life"
+https://example.com/a,love
+https://other.org/,
+"""
 
-
-FIRST = database(
-    PageContent(url=START, title="Home", keywords=["Python", "web"], body="one two three"),
-    PageContent(url="https://other.org/", description="Other", keywords=["python"], body="four"),
-)
-SECOND = database(PageContent(url=START), PageContent(url=f"{START}new"))
+B = """url;title;description;keywords;body
+https://example.com/;Home;Welcome;love;one two three
+https://example.com/b;B;;books;four five
+"""
 
 
-def test_summary_of_a_database() -> None:
-    summary = summarize(FIRST)
-
-    assert summary.pages == 2
-    assert summary.hosts == 2
-    assert summary.external_pages == 1
-    assert (summary.with_title, summary.with_description, summary.with_keywords) == (1, 1, 2)
-    assert summary.mean_body_words == 2
-    assert summary.top_keywords[0] == ("python", 2)
-    assert len(summary.rows()) == 9
+def write(tmp_path: Path, name: str, text: str) -> Path:
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8-sig")
+    return path
 
 
-def test_summary_of_an_empty_database() -> None:
-    summary = summarize(database())
-
-    assert summary.pages == 0
-    assert summary.mean_body_words == 0
-    assert dict(summary.rows())["Most common keywords"] == "-"
+def rows(tmp_path: Path) -> dict[str, tuple[str, str]]:
+    first = load_database(write(tmp_path, "a.csv", A))
+    second = load_database(write(tmp_path, "b.csv", B))
+    return {label: (a, b) for label, a, b in comparison_rows(first, second)}
 
 
-def test_url_overlap() -> None:
-    overlap = url_overlap(FIRST, SECOND)
+def test_database_is_read_with_its_own_separator(tmp_path: Path) -> None:
+    database = load_database(write(tmp_path, "b.csv", B))
 
-    assert (overlap.common, overlap.only_first, overlap.only_second) == (1, 1, 1)
+    assert database.separator == ";"
+    assert database.columns == ["url", "title", "description", "keywords", "body"]
+    assert len(database.records) == 2
+    assert database.keywords == {"love": 1, "books": 1}
+
+
+def test_structure_is_compared(tmp_path: Path) -> None:
+    compared = rows(tmp_path)
+
+    assert compared["Columns"] == ("url, keywords", "url, title, description, keywords, body")
+    assert compared["Separator"] == ("comma", "semicolon")
+    assert compared["Records (pages)"] == ("3", "2")
+
+
+def test_content_is_compared(tmp_path: Path) -> None:
+    compared = rows(tmp_path)
+
+    assert compared["Hosts"] == ("2", "1")
+    assert compared["Pages on other hosts"] == ("1", "0")
+    assert compared["With title"] == ("no column", "2")
+    assert compared["With keywords"] == ("2", "2")
+    assert compared["Distinct keywords"] == ("2", "2")
+    assert compared["Mean body length (words)"] == ("no column", "2.5")
+    assert compared["Pages in both"] == ("1", "1")
+    assert compared["Pages only here"] == ("2", "1")
+    assert compared["Keywords in both"][0] == "1 (33% of all)"
+
+
+def test_single_column_database(tmp_path: Path) -> None:
+    database = load_database(write(tmp_path, "urls.csv", "url\nhttps://example.com/\n"))
+
+    assert database.columns == ["url"]
+    assert database.urls == {"https://example.com/"}
+
+
+@pytest.mark.parametrize("text", ["", "title,body\nA,B\n"])
+def test_files_that_are_not_databases(tmp_path: Path, text: str) -> None:
+    with pytest.raises(ValueError):
+        load_database(write(tmp_path, "x.csv", text))

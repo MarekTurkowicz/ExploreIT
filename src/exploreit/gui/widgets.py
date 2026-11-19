@@ -162,6 +162,23 @@ class ChartPanel(ttk.Frame):
         return canvas
 
 
+def saved_databases(data_dir: Path) -> list[str]:
+    """Paths of saved CSV content databases (files with a url column), newest first."""
+    paths = sorted(data_dir.rglob("*.csv"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return [str(path.relative_to(data_dir)) for path in paths if _has_url_column(path)]
+
+
+def _has_url_column(path: Path) -> bool:
+    try:
+        with path.open(encoding="utf-8-sig") as file:
+            header = file.readline().lower()
+    except (OSError, UnicodeDecodeError):
+        return False
+    return "url" in [
+        cell.strip() for cell in header.replace(";", ",").replace("\t", ",").split(",")
+    ]
+
+
 def saved_crawls(data_dir: Path) -> list[str]:
     """Paths of saved crawl results relative to the data directory, newest first."""
     paths = sorted(data_dir.rglob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
