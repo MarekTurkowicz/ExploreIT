@@ -1,4 +1,4 @@
-"""Compare tab: page content stored by two crawls, side by side."""
+"""Compare tab: two content databases saved as CSV, side by side."""
 
 from __future__ import annotations
 
@@ -9,25 +9,23 @@ from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
-from pydantic import ValidationError
 
-from exploreit.compare import comparison_rows
-from exploreit.crawler import CrawlResult
-from exploreit.gui.widgets import Table, saved_crawls
+from exploreit.compare import comparison_rows, load_database
+from exploreit.gui.widgets import Table, saved_databases
 
 if TYPE_CHECKING:
     from exploreit.gui.app import ExploreApp
 
 
 class CompareTab(ttk.Frame):
-    """Pick two saved crawls and compare the content databases they hold."""
+    """Pick two CSV databases and compare their structure and content."""
 
     def __init__(self, master: tk.Misc, app: ExploreApp) -> None:
         super().__init__(master, padding=12)
         self.app = app
         self.first = tk.StringVar()
         self.second = tk.StringVar()
-        ttk.Label(self, text="Crawls made with 'Save page content' can be compared here.").pack(
+        ttk.Label(self, text="Pick two CSV databases saved with 'Save page content'.").pack(
             anchor="w"
         )
 
@@ -36,7 +34,7 @@ class CompareTab(ttk.Frame):
         form.columnconfigure(1, weight=1)
         self.pickers = []
         for row, (label, variable) in enumerate((("First", self.first), ("Second", self.second))):
-            ttk.Label(form, text=f"{label} crawl").grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Label(form, text=f"{label} database").grid(row=row, column=0, sticky="w", pady=4)
             picker = ttk.Combobox(form, textvariable=variable)
             picker.grid(row=row, column=1, sticky="ew", padx=6, pady=4)
             self.pickers.append(picker)
@@ -50,24 +48,22 @@ class CompareTab(ttk.Frame):
         self.table.pack(fill="both", expand=True)
 
     def refresh(self) -> None:
-        options = saved_crawls(self.app.data_dir)
+        options = saved_databases(self.app.data_dir)
         for picker in self.pickers:
             picker.configure(values=options)
 
     def compare(self) -> None:
         files = [self._path(variable.get()) for variable in (self.first, self.second)]
         if not all(path.is_file() for path in files):
-            messagebox.showerror("Compare", "Pick two saved crawls.")
+            messagebox.showerror("Compare", "Pick two CSV databases.")
             return
         try:
-            first, second = (CrawlResult.load(path) for path in files)
-        except (OSError, ValidationError) as error:
-            messagebox.showerror("Cannot open crawl", str(error))
+            first, second = (load_database(path) for path in files)
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Cannot open database", str(error))
             return
         names = [path.name for path in files]
-        self.table.set_rows(["", *names], comparison_rows(first, second), widths=[200, 300])
-        if not first.contents or not second.contents:
-            self.app.set_status("A crawl without saved page content shows zeros.")
+        self.table.set_rows(["", *names], comparison_rows(first, second), widths=[220, 320])
 
     def _path(self, value: str) -> Path:
         path = Path(value.strip())
@@ -75,9 +71,9 @@ class CompareTab(ttk.Frame):
 
     def _browse(self, variable: tk.StringVar) -> None:
         name = filedialog.askopenfilename(
-            title="Pick a saved crawl",
+            title="Pick a CSV database",
             initialdir=self.app.data_dir if self.app.data_dir.exists() else Path.cwd(),
-            filetypes=[("Crawl results", "*.json")],
+            filetypes=[("CSV databases", "*.csv")],
         )
         if name:
             variable.set(name)

@@ -136,7 +136,7 @@ class GraphTab(ttk.Frame):
         self.reload()
 
     def show_prestige(self, scores: dict[str, float]) -> None:
-        """Size pages by their prestige and print it next to their names (task 3.3)."""
+        """Size pages by their prestige and print it next to their names."""
         self.prestige = scores
         self.size_by.set(SizeBy.PRESTIGE)
         self.labels.set(True)

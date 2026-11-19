@@ -58,12 +58,12 @@ class RankingTab(ttk.Frame):
     def _build(self) -> None:
         top = ttk.Frame(self)
         top.pack(fill="x")
-        checks = ttk.LabelFrame(top, text="Graph requirements (task point 1)", padding=10)
+        checks = ttk.LabelFrame(top, text="Graph checks", padding=10)
         checks.pack(side="left", fill="y")
         self.checks = ttk.Label(checks, text="Load a crawl first.", justify="left")
         self.checks.pack(anchor="w")
 
-        settings = ttk.LabelFrame(top, text="Iteration (points 3 and 5)", padding=10)
+        settings = ttk.LabelFrame(top, text="Iteration", padding=10)
         settings.pack(side="left", fill="both", expand=True, padx=(12, 0))
         rows = [
             ("Normalise after each step", self.normalization, [n.value for n in Normalization]),

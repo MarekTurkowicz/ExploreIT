@@ -77,7 +77,7 @@ def link_graph(result: CrawlResult, html_only: bool = True) -> LinkGraph:
 
 
 def check_requirements(graph: LinkGraph) -> list[Requirement]:
-    """The conditions of the task: enough pages, popular pages and a long enough cycle."""
+    """Whether the graph is rich enough to rank: pages, popular pages and a long cycle."""
     in_degree = graph.in_degree
     return [
         Requirement(

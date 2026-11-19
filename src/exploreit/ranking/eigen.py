@@ -54,7 +54,7 @@ def leading_eigenvector(
 def numpy_eigenvector(matrix: Matrix) -> EigenResult:
     """The same eigenvector from numpy's general eigenvalue solver, as a cross-check.
 
-    This plays the role of the external calculator suggested by the task.
+    An independent check of the power method.
     """
     if matrix.shape[0] == 0:
         return EigenResult(0.0, np.empty(0), 0, True)

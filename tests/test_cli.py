@@ -137,7 +137,8 @@ def test_store_and_diff_commands(respx_mock: respx.MockRouter, tmp_path: Path) -
         app,
         ["store", str(tmp_path / "a.json"), "--field", "url", "--field", "keywords", "--sqlite"],
     )
-    compared = runner.invoke(app, ["diff", str(tmp_path / "a.json"), str(tmp_path / "b.json")])
+    runner.invoke(app, ["store", str(tmp_path / "b.json"), "--separator", ";"])
+    compared = runner.invoke(app, ["diff", str(tmp_path / "a.csv"), str(tmp_path / "b.csv")])
 
     assert stored.exit_code == 0, stored.output
     assert (tmp_path / "a.csv").read_text(encoding="utf-8-sig").splitlines()[1] == (
@@ -146,6 +147,7 @@ def test_store_and_diff_commands(respx_mock: respx.MockRouter, tmp_path: Path) -
     assert (tmp_path / "a.sqlite").exists()
     assert compared.exit_code == 0, compared.output
     assert "Pages only here" in compared.output
+    assert "semicolon" in compared.output  # the structure of the two files differs
 
 
 def test_store_command_needs_content(tmp_path: Path) -> None:

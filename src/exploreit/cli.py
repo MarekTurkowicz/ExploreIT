@@ -12,7 +12,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from exploreit import __version__
-from exploreit.compare import comparison_rows
+from exploreit.compare import comparison_rows, load_database
 from exploreit.config import CrawlConfig, parse_headers
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.experiments import (
@@ -378,15 +378,29 @@ def store(
         console.print(f"Database saved to {sqlite_file}")
 
 
+CsvDatabase = Annotated[
+    Path, typer.Argument(exists=True, dir_okay=False, help="A CSV database saved by `store`.")
+]
+
+
 @app.command()
-def diff(first: CrawlFile, second: CrawlFile) -> None:
-    """Compare the page content stored by two crawls."""
+def diff(first: CsvDatabase, second: CsvDatabase) -> None:
+    """Compare two CSV content databases: their structure and their content."""
+    try:
+        databases = load_database(first), load_database(second)
+    except ValueError as error:
+        console.print(f"[red]{error}[/]")
+        raise typer.Exit(code=1) from error
     table = Table(title="Content databases compared")
     table.add_column("")
-    table.add_column(first.stem, overflow="fold")
-    table.add_column(second.stem, overflow="fold")
-    for row in comparison_rows(CrawlResult.load(first), CrawlResult.load(second)):
-        table.add_row(*map(escape, row))
+    table.add_column(first.name, overflow="fold")
+    table.add_column(second.name, overflow="fold")
+    for label, *values in comparison_rows(*databases):
+        if label.isupper():
+            table.add_section()
+            table.add_row(f"[b]{label}[/]", "", "")
+        else:
+            table.add_row(label, *map(escape, values))
     console.print(table)
 
 
