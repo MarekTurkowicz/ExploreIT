@@ -121,3 +121,20 @@ def test_ranking_shares_places_for_equal_prestige() -> None:
 def test_smoothing_must_be_below_one() -> None:
     with pytest.raises(ValueError, match="smoothing"):
         run(graph("a>b"), smoothing=1.0)
+
+
+def test_pages_linking_only_to_each_other_trap_all_prestige() -> None:
+    # x and y link only to each other; everyone else eventually feeds them.
+    g = graph("a>b", "b>a", "a>x", "b>c", "c>a", "c>y", "x>y", "y>x")
+
+    trapped = run(g, weighted=True, max_iterations=2000, smoothing=0.2)
+    jumping = run(g, weighted=True, max_iterations=2000, smoothing=0.2, jump=0.15)
+
+    scores = dict(zip(g.pages, trapped.scores, strict=True))
+    assert scores["x"] + scores["y"] == pytest.approx(len(g.pages), rel=1e-3)
+    assert min(jumping.scores) > 0.1  # with a random jump nobody drops to zero
+
+
+def test_jump_must_be_below_one() -> None:
+    with pytest.raises(ValueError, match="jump"):
+        run(graph("a>b"), jump=1.0)

@@ -14,6 +14,11 @@ halves). Three rules keep the computation meaningful:
    and report whether the values really settled.
 3. Optionally smooth each step, p = (1 - s) * A^T p + s * p. Keeping part of the old
    value removes the back-and-forth swapping without changing where the values settle.
+
+Pages that link only to each other form a trap: prestige flows in and never out, so in
+the end they hold all of it and every other page drops to zero. A random jump fixes
+this the way PageRank does: with probability `jump` the visitor leaves for any page,
+p = (1 - jump) * A^T p + jump * (total prestige / number of pages).
 """
 
 from dataclasses import dataclass
@@ -69,12 +74,15 @@ def prestige(
     normalization: Normalization = Normalization.SUM,
     dangling: Dangling = Dangling.LOST,
     smoothing: float = 0.0,
+    jump: float = 0.0,
     tolerance: float = 1e-6,
     max_iterations: int = 100,
 ) -> PrestigeResult:
     """Iterate p(u) = sum_v A(v, u) p(v), starting with `initial` prestige for every page."""
     if not 0 <= smoothing < 1:
         raise ValueError("smoothing must be at least 0 and less than 1")
+    if not 0 <= jump < 1:
+        raise ValueError("jump must be at least 0 and less than 1")
     size = len(pages)
     current = np.full(size, float(initial))
     history = [current]
@@ -85,6 +93,7 @@ def prestige(
         following = matrix.T @ current
         if dangling is Dangling.SPREAD and size:
             following = following + current[no_links_out].sum() / size
+        following = (1 - jump) * following + jump * current.sum() / max(size, 1)
         following = (1 - smoothing) * following + smoothing * current
         following = _normalise(following, normalization, size)
         change = float(np.abs(following - current).max()) if size else 0.0

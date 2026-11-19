@@ -28,6 +28,7 @@ class Settings:
     normalization: Normalization = Normalization.SUM
     dangling: Dangling = Dangling.LOST
     smoothing: float = 0.0
+    jump: float = 0.0  # random jump to any page; 0 keeps the plain formula
     tolerance: float = 1e-6
     max_iterations: int = 200
     cascade_words: int = 10  # words in the first round of the word cascade
@@ -107,6 +108,7 @@ def _prestige(weighted: bool) -> Callable[[LinkGraph, Settings], Scores]:
             normalization=settings.normalization,
             dangling=settings.dangling,
             smoothing=settings.smoothing,
+            jump=settings.jump,
             tolerance=settings.tolerance,
             max_iterations=settings.max_iterations,
         )
@@ -120,6 +122,9 @@ def _eigenvector(graph: LinkGraph, settings: Settings) -> Scores:
     return Scores(result.vector, result.iterations, result.converged)
 
 
+TRUSTED_JUMP = 0.15
+
+
 def _trusted_prestige(graph: LinkGraph, settings: Settings) -> Scores:
     result = prestige(
         trusted_matrix(graph),
@@ -127,6 +132,7 @@ def _trusted_prestige(graph: LinkGraph, settings: Settings) -> Scores:
         normalization=settings.normalization,
         dangling=Dangling.SPREAD,  # a page without links out shares its vote with everyone
         smoothing=max(settings.smoothing, 0.15),  # never swap back and forth
+        jump=max(settings.jump, TRUSTED_JUMP),  # never fall into a trap of linked pages
         tolerance=settings.tolerance,
         max_iterations=settings.max_iterations,
     )

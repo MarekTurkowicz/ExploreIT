@@ -49,6 +49,7 @@ class RankingTab(ttk.Frame):
         self.normalization = tk.StringVar(value=Normalization.SUM)
         self.dangling = tk.StringVar(value=Dangling.LOST)
         self.smoothing = tk.StringVar(value="0.0")
+        self.jump = tk.StringVar(value="0.0")
         self.max_iterations = tk.StringVar(value="200")
         self.on_graph = tk.StringVar(value=METHODS[-1].name)
         self.cascade_words = tk.StringVar(value="10")
@@ -78,17 +79,21 @@ class RankingTab(ttk.Frame):
         ttk.Spinbox(
             settings, textvariable=self.smoothing, from_=0, to=0.9, increment=0.1, width=6
         ).grid(row=0, column=3, sticky="w")
-        ttk.Label(settings, text="Max iterations").grid(row=1, column=2, sticky="w", padx=8)
+        ttk.Label(settings, text="Random jump (0 - 0.9)").grid(row=1, column=2, sticky="w", padx=8)
+        ttk.Spinbox(
+            settings, textvariable=self.jump, from_=0, to=0.9, increment=0.05, width=6
+        ).grid(row=1, column=3, sticky="w")
+        ttk.Label(settings, text="Max iterations").grid(row=2, column=2, sticky="w", padx=8)
         ttk.Spinbox(
             settings, textvariable=self.max_iterations, from_=1, to=100_000, increment=50, width=8
-        ).grid(row=1, column=3, sticky="w")
+        ).grid(row=2, column=3, sticky="w")
         ttk.Label(
             settings,
-            text="Smoothing keeps part of the old value each step, which stops prestige "
-            "from swapping back and forth in cycles.",
+            text="Smoothing stops prestige from swapping back and forth in cycles. A random "
+            "jump keeps pages that link only to each other from taking all of it.",
             wraplength=420,
             foreground="#898781",
-        ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
         own = ttk.LabelFrame(top, text="ExploreIT rank (own method)", padding=10)
         own.pack(side="left", fill="both", padx=(12, 0))
@@ -157,6 +162,9 @@ class RankingTab(ttk.Frame):
     def settings(self) -> Settings:
         """Raises ValueError for numbers that cannot be read or are out of range."""
         smoothing = float(self.smoothing.get())
+        jump = float(self.jump.get())
+        if not 0 <= jump < 1:
+            raise ValueError("Random jump must be at least 0 and less than 1.")
         if not 0 <= smoothing < 1:
             raise ValueError("Smoothing must be at least 0 and less than 1.")
         weights = {part: float(variable.get()) for part, variable in self.weights.items()}
@@ -166,6 +174,7 @@ class RankingTab(ttk.Frame):
             normalization=Normalization(self.normalization.get()),
             dangling=Dangling(self.dangling.get()),
             smoothing=smoothing,
+            jump=jump,
             max_iterations=max(1, int(self.max_iterations.get())),
             cascade_words=max(1, int(self.cascade_words.get())),
             weight_links=weights["links"],

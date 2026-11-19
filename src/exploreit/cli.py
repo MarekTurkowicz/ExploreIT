@@ -243,6 +243,9 @@ def rank(
     smoothing: Annotated[
         float, typer.Option(min=0, max=0.99, help="Part of the old value kept each step.")
     ] = 0.0,
+    jump: Annotated[
+        float, typer.Option(min=0, max=0.99, help="Chance of jumping to any page (damping).")
+    ] = 0.0,
     max_iterations: Annotated[int, typer.Option(min=1, help="Stop after this many steps.")] = 200,
     top: Annotated[int, typer.Option(min=1, help="How many pages to list.")] = 20,
     words: Annotated[
@@ -283,6 +286,7 @@ def rank(
         normalization=normalization,
         dangling=dangling,
         smoothing=smoothing,
+        jump=jump,
         max_iterations=max_iterations,
         cascade_words=words,
         weight_links=weight_links,
