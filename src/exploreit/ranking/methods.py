@@ -52,6 +52,7 @@ class Scores:
     iterations: int = 0
     converged: bool = True
     history: list[np.ndarray] = field(default_factory=list)  # for iterative methods
+    eigenvalue: float = float("nan")  # only the eigenvector method has one
 
 
 @dataclass(frozen=True)
@@ -124,7 +125,7 @@ def _prestige(weighted: bool) -> Callable[[LinkGraph, Settings], Scores]:
 
 def _eigenvector(graph: LinkGraph, settings: Settings) -> Scores:
     result = leading_eigenvector(adjacency_matrix(graph), tolerance=min(settings.tolerance, 1e-8))
-    return Scores(result.vector, result.iterations, result.converged)
+    return Scores(result.vector, result.iterations, result.converged, eigenvalue=result.value)
 
 
 TRUSTED_JUMP = 0.15
@@ -229,6 +230,10 @@ def methods_for(settings: Settings) -> list[Method]:
 
 def format_tau(tau: float) -> str:
     return "n/a" if np.isnan(tau) else f"{tau:.3f}"
+
+
+def format_eigenvalue(value: float) -> str:
+    return "" if np.isnan(value) else f"{value:.4f}"
 
 
 def write_ranking_csv(comparison: Comparison, path: Path) -> None:

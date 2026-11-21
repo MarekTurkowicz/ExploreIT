@@ -175,6 +175,9 @@ class RankingTab(ttk.Frame):
         lines.append(f"{len(self.graph.pages)} pages, {len(self.graph.links)} links between them")
         if self.graph.merged:
             lines.append(f"{len(self.graph.merged)} duplicate addresses merged")
+        # The graph tab can name pages P1, P2 ... like the matrices; a copy shares its name.
+        names = labels | {copy: labels[kept] for copy, kept in self.graph.merged.items()}
+        self.app.graph_tab.set_short_names(names)
         self.checks.configure(text="\n".join(lines))
         self.compute_button.state(["!disabled"] if self.graph.pages else ["disabled"])
 
@@ -220,7 +223,7 @@ class RankingTab(ttk.Frame):
     def _display(self, comparison: Comparison) -> None:
         from exploreit.plots import convergence_figure
         from exploreit.ranking.matrix import short_labels
-        from exploreit.ranking.methods import QUERY_METHOD, format_tau
+        from exploreit.ranking.methods import QUERY_METHOD, format_eigenvalue, format_tau
 
         self.comparison = comparison
         self.compute_button.state(["!disabled"])
@@ -241,17 +244,18 @@ class RankingTab(ttk.Frame):
             widths=[50, 200, *([95] * len(names))],
         )
         self.methods_table.set_rows(
-            ["Method", "Iterations", "Settled", "Time (ms)"],
+            ["Method", "Iterations", "Settled", "Time (ms)", "Eigenvalue"],
             (
                 [
                     result.method.name,
                     result.scores.iterations,
                     "yes" if result.scores.converged else "NO",
                     f"{result.seconds * 1000:.1f}",
+                    format_eigenvalue(result.scores.eigenvalue),
                 ]
                 for result in comparison.results
             ),
-            widths=[150, 80, 70],
+            widths=[150, 80, 70, 80, 90],
         )
         self.agreement.set_rows(
             ["Methods compared", "Kendall tau"],

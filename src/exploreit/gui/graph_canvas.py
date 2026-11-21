@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections import defaultdict
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from math import hypot
 
 from exploreit.gui.graph_model import (
@@ -37,6 +37,7 @@ class Style:
     node_scale: float = 1.0
     labels: bool = True
     edges: bool = True
+    short_names: Mapping[str, str] = field(default_factory=dict)  # page -> "P1", ...
     background: str = "#ffffff"
     foreground: str = "#222222"
     edge_colour: str = "#9a9890"
@@ -131,7 +132,10 @@ class GraphCanvas(tk.Canvas):
             self.itemconfigure(item, fill=self._colours[url], outline=style.background)
         for url, item in self._label_items.items():
             self.itemconfigure(
-                item, text=node_label(self.data.nodes[url], self.start_url, style.size_by)
+                item,
+                text=node_label(
+                    self.data.nodes[url], self.start_url, style.size_by, style.short_names
+                ),
             )
         # One call per tag instead of one per item: a graph can have thousands of links.
         self.itemconfigure(

@@ -207,3 +207,14 @@ def test_query_joins_the_mix_instead_of_replacing_the_cascade() -> None:
     assert filtered[2] == 0
     # With weight it also moves the page that matches best further up.
     assert mixed.scores.values[0] - mixed.scores.values[1] > plain[0] - plain[1]
+
+
+def test_eigenvector_method_reports_the_largest_eigenvalue() -> None:
+    links = (("a", "b"), ("b", "c"), ("c", "a"), ("a", "c"))
+    graph = LinkGraph(("a", "b", "c"), links)
+    expected = max(np.linalg.eigvals(np.array([[0, 1, 1], [0, 0, 1], [1, 0, 0]])).real)
+
+    results = {r.method.name: r.scores for r in compare(graph, Settings()).results}
+
+    assert results["eigenvector"].eigenvalue == pytest.approx(expected, abs=1e-6)
+    assert np.isnan(results["prestige"].eigenvalue)

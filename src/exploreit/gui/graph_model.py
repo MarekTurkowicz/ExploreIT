@@ -182,9 +182,17 @@ def top_prestige(data: GraphData) -> float:
     return max((node.prestige for node in data.nodes.values()), default=0.0)
 
 
-def node_label(node: Node, start_url: str, size_by: SizeBy) -> str:
-    """The page name, followed by its prestige when the graph is sized by prestige."""
-    label = short_label(node.url, start_url)
+def node_label(
+    node: Node,
+    start_url: str,
+    size_by: SizeBy,
+    short_names: Mapping[str, str] = MappingProxyType({}),
+) -> str:
+    """The page name, followed by its prestige when the graph is sized by prestige.
+
+    `short_names` (e.g. P1, P2 as in the adjacency matrix) replace the page's path.
+    """
+    label = short_names.get(node.url) or short_label(node.url, start_url)
     return f"{label}  {node.prestige:.3g}" if size_by is SizeBy.PRESTIGE else label
 
 

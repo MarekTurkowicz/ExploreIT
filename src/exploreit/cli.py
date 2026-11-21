@@ -274,7 +274,13 @@ def rank(
         write_legend_csv,
         write_matrix_csv,
     )
-    from exploreit.ranking.methods import Settings, compare, format_tau, write_ranking_csv
+    from exploreit.ranking.methods import (
+        Settings,
+        compare,
+        format_eigenvalue,
+        format_tau,
+        write_ranking_csv,
+    )
 
     graph = link_graph(CrawlResult.load(crawl_file), merge_duplicates=not keep_duplicates)
     labels = dict(zip(graph.pages, short_labels(graph), strict=True))
@@ -308,7 +314,7 @@ def rank(
         console.print("[yellow]No page content in this crawl:[/] the word cascade is empty.")
     comparison = compare(graph, settings)
     methods = Table(title="Methods")
-    for column in ("method", "iterations", "settled", "ms"):
+    for column in ("method", "iterations", "settled", "ms", "eigenvalue"):
         methods.add_column(column, justify="left" if column == "method" else "right")
     for result in comparison.results:
         methods.add_row(
@@ -316,6 +322,7 @@ def rank(
             str(result.scores.iterations),
             "yes" if result.scores.converged else "[red]no[/]",
             f"{result.seconds * 1000:.1f}",
+            format_eigenvalue(result.scores.eigenvalue),
         )
     console.print(methods)
 

@@ -109,3 +109,4 @@ def test_prestige_sets_size_and_label() -> None:
     )
     assert node_label(home, START, SizeBy.PRESTIGE) == "/  4"
     assert node_label(home, START, SizeBy.LINKS_IN) == "/"
+    assert node_label(home, START, SizeBy.PRESTIGE, {START: "P1"}) == "P1  4"

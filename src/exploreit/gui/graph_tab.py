@@ -56,6 +56,8 @@ class GraphTab(ttk.Frame):
         self.labels = tk.BooleanVar(value=True)
         self.edges = tk.BooleanVar(value=True)
         self.unvisited = tk.BooleanVar(value=False)
+        self.matrix_labels = tk.BooleanVar(value=False)
+        self.short_names: dict[str, str] = {}  # set by the Ranking tab
         self._build()
 
     def _build(self) -> None:
@@ -91,6 +93,7 @@ class GraphTab(ttk.Frame):
         toggles.pack(fill="x", pady=(0, 8))
         for text, flag, toggled in [
             ("Labels", self.labels, self.restyle),
+            ("Matrix names (P1, P2 …)", self.matrix_labels, self.restyle),
             ("Links", self.edges, self.restyle),
             ("Linked pages that were not visited", self.unvisited, self.reload),
         ]:
@@ -136,6 +139,12 @@ class GraphTab(ttk.Frame):
         if self.size_by.get() == SizeBy.PRESTIGE:
             self.size_by.set(SizeBy.LINKS_IN)
         self.reload()
+
+    def set_short_names(self, names: dict[str, str]) -> None:
+        """The names pages have in the adjacency matrix, shown with "Matrix names"."""
+        self.short_names = names
+        if hasattr(self, "data"):
+            self.restyle()
 
     def show_prestige(self, scores: dict[str, float]) -> None:
         """Size pages by their prestige and print it next to their names."""
@@ -196,7 +205,9 @@ class GraphTab(ttk.Frame):
                 for url, node in nodes.items()
             },
             {
-                url: node_label(node, self.result.config.start_url, style.size_by)
+                url: node_label(
+                    node, self.result.config.start_url, style.size_by, style.short_names
+                )
                 for url, node in nodes.items()
             }
             if style.labels
@@ -224,6 +235,7 @@ class GraphTab(ttk.Frame):
             node_scale=self.node_scale.get(),
             labels=self.labels.get(),
             edges=self.edges.get(),
+            short_names=self.short_names if self.matrix_labels.get() else {},
             background=colours.inputbg,
             foreground=colours.inputfg,
             accent=colours.primary,
