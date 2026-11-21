@@ -18,7 +18,8 @@ from matplotlib.ticker import MaxNLocator
 from exploreit.crawler import CrawlResult
 from exploreit.graph import compute_stats
 
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a"]  # categorical slots 1-3: blue, orange, aqua
+# Categorical slots: blue, orange, aqua, violet, yellow.
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#6250d6", "#eda100"]
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
 INK_SECONDARY = "#52514e"
