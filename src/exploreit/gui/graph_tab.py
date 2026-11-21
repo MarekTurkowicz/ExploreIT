@@ -6,7 +6,7 @@ import tkinter as tk
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
@@ -28,6 +28,8 @@ from exploreit.gui.graph_model import (
     radius,
     top_prestige,
 )
+
+SLOW_LAYOUT_NODES = 300  # Kamada-Kawai takes seconds here and minutes at 1000
 
 if TYPE_CHECKING:
     from exploreit.gui.app import ExploreApp
@@ -158,6 +160,17 @@ class GraphTab(ttk.Frame):
         if not hasattr(self, "result"):
             return
         data, layout = self.data, Layout(self.layout.get())
+        if (
+            layout is Layout.KAMADA_KAWAI
+            and len(data.nodes) > SLOW_LAYOUT_NODES
+            and messagebox.askyesno(
+                "Layout",
+                f"Kamada-Kawai compares every pair of the {len(data.nodes)} pages and can take "
+                "minutes on a graph this big. Use the much faster spring layout instead?",
+            )
+        ):
+            layout = Layout.SPRING
+            self.layout.set(layout)
         self.summary.configure(text="Laying out the graph …")
         self.app.tasks.run(lambda: positions(data, layout), self._display)
 

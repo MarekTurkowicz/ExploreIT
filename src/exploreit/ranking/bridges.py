@@ -15,34 +15,37 @@ from exploreit.ranking.graph import LinkGraph
 
 def betweenness(graph: LinkGraph) -> np.ndarray:
     """Share of shortest paths between other pages that run through each page (0 to 1)."""
-    pages = graph.pages
-    size = len(pages)
-    score = dict.fromkeys(pages, 0.0)
-    for source in pages:
+    size = len(graph.pages)
+    index = {page: position for position, page in enumerate(graph.pages)}
+    out_links = [[index[target] for target in graph.out_links[page]] for page in graph.pages]
+    score = [0.0] * size
+    for source in range(size):
         # Breadth-first search: distance and number of shortest paths from `source`.
-        order: list[str] = []
-        parents: dict[str, list[str]] = {page: [] for page in pages}
-        paths = dict.fromkeys(pages, 0)
-        distance = dict.fromkeys(pages, -1)
+        order: list[int] = []
+        parents: list[list[int]] = [[] for _ in range(size)]
+        paths = [0] * size
+        distance = [-1] * size
         paths[source], distance[source] = 1, 0
         queue = deque([source])
         while queue:
             page = queue.popleft()
             order.append(page)
-            for target in graph.out_links[page]:
+            step = distance[page] + 1
+            for target in out_links[page]:
                 if distance[target] < 0:
-                    distance[target] = distance[page] + 1
+                    distance[target] = step
                     queue.append(target)
-                if distance[target] == distance[page] + 1:
+                if distance[target] == step:
                     paths[target] += paths[page]
                     parents[target].append(page)
         # Walk back from the farthest pages, handing each page its share of the paths.
-        credit = dict.fromkeys(pages, 0.0)
+        credit = [0.0] * size
         for page in reversed(order):
+            share = (1 + credit[page]) / paths[page]
             for parent in parents[page]:
-                credit[parent] += paths[parent] / paths[page] * (1 + credit[page])
+                credit[parent] += paths[parent] * share
             if page != source:
                 score[page] += credit[page]
     pairs = (size - 1) * (size - 2)  # ordered pairs of other pages in a directed graph
-    values = np.array([score[page] for page in pages])
+    values = np.array(score)
     return values / pairs if pairs else values
