@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel
 
 from exploreit.crawler import CrawlResult
+from exploreit.formatting import format_duration
 
 
 class GraphStats(BaseModel):
@@ -15,6 +16,7 @@ class GraphStats(BaseModel):
     pages: int
     html_pages: int
     error_pages: int
+    blocked_pages: int
     failed: int
     unvisited_targets: int
     links: int
@@ -36,6 +38,7 @@ class GraphStats(BaseModel):
         rows = [
             ("Pages visited", f"{self.pages} ({self.html_pages} HTML)"),
             ("Error pages / failed", f"{self.error_pages} / {self.failed}"),
+            ("Blocked by anti-bot protection", str(self.blocked_pages)),
             ("Linked but not visited", str(self.unvisited_targets)),
             (
                 "Links",
@@ -79,6 +82,7 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
         pages=len(result.pages),
         html_pages=len(html),
         error_pages=sum(page.status_code >= 400 for page in result.pages),
+        blocked_pages=sum(bool(page.blocked_by) for page in result.pages),
         failed=len(result.failed),
         unvisited_targets=len(in_degree.keys() - visited),
         links=len(result.edges),
@@ -94,12 +98,6 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
         crawl_seconds=round(result.duration, 1),
         stopped=result.stopped,
     )
-
-
-def format_duration(seconds: float) -> str:
-    """Format seconds as "m:ss", e.g. 75.4 -> "1:15"."""
-    minutes, rest = divmod(round(seconds), 60)
-    return f"{minutes}:{rest:02d}"
 
 
 def click_tree(result: CrawlResult) -> dict[str, list[str]]:

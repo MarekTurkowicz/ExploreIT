@@ -12,7 +12,8 @@ from exploreit.crawler import CrawlResult
 from exploreit.gui.app import DARK_THEME, ExploreApp, create_window
 from exploreit.gui.widgets import Table
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
-from exploreit.storage import ContentField
+from exploreit.options import ContentField
+from exploreit.ranking.methods import METHODS
 
 SITE = "https://example.com"
 
@@ -31,7 +32,14 @@ def app(tmp_path: Path) -> Iterator[ExploreApp]:
 @pytest.fixture
 def errors(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     shown: list[str] = []
-    for module in ("crawl_tab", "experiments_tab", "compare_tab", "results_tab", "widgets"):
+    for module in (
+        "crawl_tab",
+        "experiments_tab",
+        "compare_tab",
+        "results_tab",
+        "ranking_tab",
+        "widgets",
+    ):
         monkeypatch.setattr(
             f"exploreit.gui.{module}.messagebox.showerror",
             lambda title, message: shown.append(f"{title}: {message}"),
@@ -189,6 +197,20 @@ def test_settings_are_locked_while_crawling(app: ExploreApp) -> None:
     assert not any(widget.instate(["disabled"]) for widget in app.crawl_tab.inputs)
 
 
+def test_fit_to_screen_shrinks_text_on_a_small_screen(app: ExploreApp) -> None:
+    app.set_font_size(30)
+    app.fit_to_screen(screen=(800, 600))
+
+    assert app.font_size.get() < 30
+
+
+def test_fit_to_screen_keeps_text_on_a_large_screen(app: ExploreApp) -> None:
+    app.set_font_size(12)
+    app.fit_to_screen(screen=(100_000, 100_000))
+
+    assert app.font_size.get() == 12
+
+
 def test_theme_and_font_size(app: ExploreApp) -> None:
     app.dark.set(True)
     app.set_theme(DARK_THEME)
@@ -305,3 +327,76 @@ def test_content_can_be_saved_anywhere(app: ExploreApp, tmp_path: Path) -> None:
     lines = (tmp_path / "export" / "keywords.csv").read_text(encoding="utf-8-sig").splitlines()
     assert lines == ["url;keywords", f"{SITE}/;a, b"]
     assert (tmp_path / "export" / "crawl.db").stat().st_size > 0
+
+
+def ring_crawl(path: Path, size: int = 6) -> None:
+    """A ring of pages where page 0 also gets links from every other page."""
+    pages = [f"{SITE}/p{i}" for i in range(size)]
+    edges = [
+        Edge(source=pages[i], target=pages[(i + 1) % size], kind=LinkKind.ANCHOR)
+        for i in range(size)
+    ]
+    edges += [Edge(source=page, target=pages[0], kind=LinkKind.ANCHOR) for page in pages[2:]]
+    CrawlResult(
+        config=CrawlConfig(start_url=pages[0]),
+        pages=[
+            CrawledPage(url=url, depth=0, status_code=200, content_type="text/html")
+            for url in pages
+        ],
+        edges=edges,
+        failed={},
+    ).save(path)
+
+
+def test_ranking_tab_ranks_and_shows_prestige_on_the_graph(app: ExploreApp, tmp_path: Path) -> None:
+    ring_crawl(tmp_path / "ring.json")
+    app.results_tab.open_file(tmp_path / "ring.json")
+    settle(app)
+    tab = app.ranking_tab
+
+    assert "✘  pages (at least 20): 6" in tab.checks.cget("text")
+    assert "cycle: P1 → P2 → P3" in tab.checks.cget("text")
+    tab.smoothing.set("0.3")
+    tab.compute()
+    settle(app)
+
+    assert len(tab.table.rows()) == 6
+    assert tab.table.rows()[0][0] == "P1"  # page 0 gets the most links
+    assert len(tab.agreement.rows()) == len(METHODS) * (len(METHODS) - 1) // 2
+    tab.on_graph.set("weighted prestige")
+    tab.show_on_graph()
+    settle(app)
+    canvas = app.graph_tab.canvas
+    best = max(canvas.data.nodes.values(), key=lambda node: node.prestige)
+    assert best.url == f"{SITE}/p0"
+    assert canvas.itemcget(canvas._label_items[best.url], "text").startswith("/p0  ")
+    app.graph_tab.matrix_labels.set(True)
+    app.graph_tab.restyle()
+    assert canvas.itemcget(canvas._label_items[best.url], "text").startswith("P1  ")
+    eigen = next(row for row in tab.methods_table.rows() if row[0] == "eigenvector")
+    assert float(eigen[4]) > 0  # the largest eigenvalue is shown
+
+    window = tab.show_matrix_window()
+    window.weighted.set(True)
+    window.draw()
+    window.destroy()
+
+    tab.save_rankings()
+    tab.save_matrices()
+    assert sorted(p.name for p in tmp_path.glob("ring-*.csv")) == [
+        "ring-A-weighted.csv",
+        "ring-A.csv",
+        "ring-pages.csv",
+        "ring-ranking.csv",
+    ]
+
+
+def test_ranking_settings_are_checked(app: ExploreApp, tmp_path: Path, errors: list[str]) -> None:
+    ring_crawl(tmp_path / "ring.json")
+    app.results_tab.open_file(tmp_path / "ring.json")
+    settle(app)
+
+    app.ranking_tab.smoothing.set("1.5")
+    app.ranking_tab.compute()
+
+    assert errors and "Smoothing" in errors[0]

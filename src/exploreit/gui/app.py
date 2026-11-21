@@ -1,25 +1,49 @@
 """The ExploreIT window: one tab per task, a status bar, theme and font size controls."""
 
+from __future__ import annotations
+
 import tkinter as tk
 import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import ttk
+from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 from ttkbootstrap.style.theme import Colors
 
-from exploreit.crawler import CrawlResult
 from exploreit.gui.compare_tab import CompareTab
 from exploreit.gui.crawl_tab import CrawlTab
 from exploreit.gui.experiments_tab import ExperimentsTab
 from exploreit.gui.graph_canvas import LABEL_FONT
 from exploreit.gui.graph_tab import GraphTab
+from exploreit.gui.ranking_tab import RankingTab
 from exploreit.gui.results_tab import ContentTab, PagesTab, ResultsTab
-from exploreit.gui.widgets import TaskRunner
+from exploreit.gui.widgets import Preloader, TaskRunner
+
+if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
 
 LIGHT_THEME, DARK_THEME = "nord-light", "nord-dark"
 DEFAULT_FONT_SIZE = 18
 FONT_SIZES = range(10, 31)
+
+# What each part of the window needs, heaviest libraries included. They load in the
+# background, in this order, right after the window appears: the crawl first, since
+# that is what a session starts with, then what showing a crawl needs, then charts.
+CRAWL_MODULES = ["pydantic", "httpx", "bs4", "lxml.etree", "exploreit.config", "exploreit.crawler"]
+RESULT_MODULES = ["exploreit.graph", "exploreit.export", "exploreit.storage", "networkx"]
+RANKING_MODULES = ["numpy", "exploreit.ranking.methods"]
+CHART_MODULES = ["pandas", "matplotlib.figure", "exploreit.plots"]
+LAYOUT_MODULES = ["scipy.sparse"]  # networkx needs it for big graph layouts
+EXPERIMENT_MODULES = ["exploreit.experiments"]
+WARM_UP = [
+    *CRAWL_MODULES,
+    *RESULT_MODULES,
+    *RANKING_MODULES,
+    *CHART_MODULES,
+    *LAYOUT_MODULES,
+    *EXPERIMENT_MODULES,
+]
 
 UI_FONTS = ["TkDefaultFont", "TkTextFont", "TkMenuFont", "TkCaptionFont", "TkTooltipFont"]
 
@@ -31,6 +55,7 @@ class ExploreApp:
         self.root = root
         self.output_dir = tk.StringVar(value=str(data_dir.resolve()))
         self.tasks = TaskRunner(root)
+        self.preloader = Preloader()
         self.status = tk.StringVar(value=f"Results are saved in {data_dir.resolve()}")
         self.dark = tk.BooleanVar(value=False)
         self.font_size = tk.IntVar(value=DEFAULT_FONT_SIZE)
@@ -44,6 +69,7 @@ class ExploreApp:
         self.graph_tab = GraphTab(self.notebook, self)
         self.pages_tab = PagesTab(self.notebook)
         self.content_tab = ContentTab(self.notebook, self)
+        self.ranking_tab = RankingTab(self.notebook, self)
         self.experiments_tab = ExperimentsTab(self.notebook, self)
         self.compare_tab = CompareTab(self.notebook, self)
         tabs: list[tuple[ttk.Frame, str]] = [
@@ -52,12 +78,20 @@ class ExploreApp:
             (self.graph_tab, "  Graph  "),
             (self.pages_tab, "  Pages  "),
             (self.content_tab, "  Content  "),
+            (self.ranking_tab, "  Ranking  "),
             (self.experiments_tab, "  Experiments  "),
             (self.compare_tab, "  Compare  "),
         ]
         for tab, title in tabs:
             self.notebook.add(tab, text=title)
-        self.notebook.bind("<<NotebookTabChanged>>", lambda _: self.compare_tab.refresh())
+        self.notebook.bind("<<NotebookTabChanged>>", lambda _: self._tab_changed())
+        self._tab_modules: dict[str, list[str]] = {
+            str(self.crawl_tab): CRAWL_MODULES,
+            str(self.results_tab): RESULT_MODULES + CHART_MODULES,
+            str(self.graph_tab): RESULT_MODULES + LAYOUT_MODULES,
+            str(self.ranking_tab): RANKING_MODULES + CHART_MODULES,
+            str(self.experiments_tab): CRAWL_MODULES + EXPERIMENT_MODULES + CHART_MODULES,
+        }
         self._build_status_bar()
         self._style_inputs()
 
@@ -86,6 +120,8 @@ class ExploreApp:
             width=4,
             command=lambda: self.set_font_size(self.font_size.get()),
         )
+        for event in ("<Return>", "<FocusOut>"):  # a typed size, not only the arrows
+            size.bind(event, lambda _: self._apply_typed_size())
         size.pack(side="right")
         ttk.Label(bar, text="Text size").pack(side="right", padx=(0, 6))
 
@@ -113,6 +149,29 @@ class ExploreApp:
     def theme_colours(self) -> Colors:
         colours: Colors = self.root.style.colors
         return colours
+
+    def fit_to_screen(self, screen: tuple[int, int] | None = None) -> None:
+        """Shrink the text until every tab fits on the screen.
+
+        High-DPI screens draw the same point size with more pixels, so the default
+        size can be too big for them.
+        """
+        width, height = screen or (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
+        height = round(height * 0.85)  # room for the taskbar, title bar and some air
+        size = self.font_size.get()
+        while True:
+            self.root.update_idletasks()
+            fits = self.root.winfo_reqwidth() <= width and self.root.winfo_reqheight() <= height
+            if fits or size <= FONT_SIZES[0]:
+                return
+            size -= 1
+            self.set_font_size(size)
+
+    def _apply_typed_size(self) -> None:
+        try:
+            self.set_font_size(self.font_size.get())
+        except tk.TclError:  # not a number
+            self.font_size.set(round(tkfont.nametofont("TkDefaultFont").actual()["size"]))
 
     def set_font_size(self, size: int) -> None:
         size = min(max(size, FONT_SIZES[0]), FONT_SIZES[-1])
@@ -163,14 +222,28 @@ class ExploreApp:
                 "TkDefaultFont",
             )
 
+    def _tab_changed(self) -> None:
+        """Load what the opened tab needs first, before the user presses anything."""
+        self.preloader.prefer(self._tab_modules.get(self.notebook.select(), []))
+        self.compare_tab.refresh()
+
     def show_crawl(self, result: CrawlResult, path: Path) -> None:
         """Show a crawl, fresh or opened from disk, in every tab that describes it."""
         self.results_tab.show(result, path)
         self.graph_tab.show(result, path)
         self.pages_tab.show(result)
         self.content_tab.show(result, path)
+        self.ranking_tab.show(result, path)
         self.notebook.select(self.results_tab)
         self.set_status(f"{len(result.pages)} pages, {len(result.edges)} links · {path}")
+
+
+def _maximise(root: tk.Tk) -> None:
+    """Start with the whole screen, so the larger text never squeezes the layout."""
+    try:
+        root.state("zoomed")  # Windows and macOS
+    except tk.TclError:
+        root.attributes("-zoomed", True)  # X11
 
 
 def _all_widgets[W: tk.Misc](parent: tk.Misc, kind: type[W]) -> list[W]:
@@ -190,9 +263,13 @@ def create_window(data_dir: Path = Path("data")) -> tuple[tb.Window, ExploreApp]
 
 def run_app(data_dir: Path = Path("data")) -> None:
     """Open the ExploreIT window in front of other windows and run until it is closed."""
-    root, _ = create_window(data_dir)
+    root, app = create_window(data_dir)
+    app.fit_to_screen()
+    _maximise(root)
     root.lift()
     root.attributes("-topmost", True)
     root.after(800, lambda: root.attributes("-topmost", False))
     root.focus_force()
+    # Show the window first, then load the slow libraries while the user looks around.
+    root.after(100, lambda: app.preloader.load(WARM_UP))
     root.mainloop()

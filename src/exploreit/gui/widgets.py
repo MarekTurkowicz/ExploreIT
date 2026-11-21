@@ -3,22 +3,77 @@
 from __future__ import annotations
 
 import gc
+import importlib
 import queue
+import sys
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
+from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 from tkinter import messagebox, ttk
+from typing import TYPE_CHECKING
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
-from pydantic import ValidationError
+if TYPE_CHECKING:
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+    from matplotlib.figure import Figure
 
 POLL_MS = 50
 COLLECT_EVERY_S = 2.0
+
+
+class Preloader:
+    """Imports modules in a background thread, so that their first use is instant.
+
+    The window appears before the libraries doing the real work (HTTP, HTML parsing,
+    numpy, matplotlib) have loaded. They then load one by one in the order they are
+    likely to be needed, and `prefer` moves the modules of whatever the user opens
+    next to the front of the queue. Importing a module already imported costs nothing.
+    """
+
+    def __init__(self) -> None:
+        self._queue: deque[str] = deque()
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self.loaded: list[str] = []  # in the order they were imported, for the status bar
+
+    def load(self, modules: Iterable[str]) -> None:
+        """Queue modules after those already waiting."""
+        with self._lock:
+            self._queue.extend(module for module in modules if module not in self._queue)
+        self._start()
+
+    def prefer(self, modules: Iterable[str]) -> None:
+        """Load these modules before everything else still waiting."""
+        with self._lock:
+            for module in reversed(list(modules)):
+                if module in self._queue:
+                    self._queue.remove(module)
+                self._queue.appendleft(module)
+        self._start()
+
+    def _start(self) -> None:
+        if self._thread is None or not self._thread.is_alive():
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+
+    def _run(self) -> None:
+        while True:
+            with self._lock:
+                if not self._queue:
+                    return
+                module = self._queue.popleft()
+            if module in sys.modules:
+                continue
+            try:
+                importlib.import_module(module)
+            except Exception:
+                continue
+            self.loaded.append(module)
 
 
 class TaskRunner:
@@ -116,12 +171,16 @@ class Table(ttk.Frame):
     def set_rows(
         self, columns: Sequence[str], rows: Iterable[Sequence[object]], widths: Sequence[int] = ()
     ) -> None:
+        """Show the rows; widths are in pixels at 96 DPI and grow to fit each heading."""
         self.tree.delete(*self.tree.get_children())
         self.tree.configure(columns=list(columns))
+        dpi_scale = float(self.tk.call("tk", "scaling")) * 72 / 96
+        heading_font = tkfont.nametofont("TkHeadingFont")
         for index, column in enumerate(columns):
             self.tree.heading(column, text=column, command=partial(self._sort, column))
             width = widths[index] if index < len(widths) else 120
-            self.tree.column(column, width=width, stretch=index == len(columns) - 1)
+            width = max(round(width * dpi_scale), heading_font.measure(column) + 24)
+            self.tree.column(column, width=width, stretch=True)  # all share the spare room
         for row in rows:
             self.tree.insert("", "end", values=[str(value) for value in row])
 
@@ -154,12 +213,42 @@ class ChartPanel(ttk.Frame):
         # The old chart holds Tk images that may only be freed in this thread. Collect it
         # now, or Python may free it later in a worker thread and Tk would complain.
         gc.collect()
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
+        self._match_theme(figure)
         canvas = FigureCanvasTkAgg(figure, master=self)
         if self.toolbar:
             NavigationToolbar2Tk(canvas, self, pack_toolbar=False).pack(side="bottom", fill="x")
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        canvas.draw()
+        widget = canvas.get_tk_widget()
+        # Ask for little room and fill whatever the layout gives: the figure is redrawn to
+        # fit, instead of forcing the window to its own size in inches.
+        widget.configure(width=200, height=150)
+        widget.pack(fill="both", expand=True)
+        canvas.draw_idle()  # once, after the layout has sized the widget
         return canvas
+
+    def _match_theme(self, figure: Figure) -> None:
+        """Paint the chart background and text in the window's colours (light or dark)."""
+        from matplotlib.text import Text
+
+        style = ttk.Style(self)
+        background = style.lookup("TFrame", "background") or "white"
+        foreground = style.lookup("TLabel", "foreground") or "black"
+        figure.set_facecolor(background)
+        for text in figure.findobj(Text):
+            text.set_color(foreground)
+        for ax in figure.axes:
+            ax.set_facecolor(background)
+            ax.tick_params(colors=foreground)
+            for spine in ax.spines.values():
+                spine.set_edgecolor(foreground)
+            for line in [*ax.get_xgridlines(), *ax.get_ygridlines()]:
+                line.set_color(foreground)
+                line.set_alpha(0.15)
+        for legend in [*figure.legends, *(ax.get_legend() for ax in figure.axes)]:
+            if legend is not None:
+                legend.get_frame().set_facecolor(background)
+                legend.get_frame().set_edgecolor(background)
 
 
 def saved_databases(data_dir: Path) -> list[str]:
@@ -189,8 +278,13 @@ def timestamp() -> str:
     return f"{datetime.now():%Y%m%d-%H%M%S}"
 
 
-def describe_errors(error: ValidationError) -> str:
-    return "\n".join(f"{problem['loc'][0]}: {problem['msg']}" for problem in error.errors())
+def describe_errors(error: ValueError) -> str:
+    """Readable text for a pydantic validation error or any other ValueError."""
+    from pydantic import ValidationError
+
+    if isinstance(error, ValidationError):
+        return "\n".join(f"{problem['loc'][0]}: {problem['msg']}" for problem in error.errors())
+    return str(error)
 
 
 def show_error(error: Exception) -> None:

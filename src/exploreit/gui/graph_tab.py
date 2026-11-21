@@ -6,12 +6,11 @@ import tkinter as tk
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 
-from exploreit.crawler import CrawlResult
 from exploreit.gui.graph_canvas import GraphCanvas, Style, describe
 from exploreit.gui.graph_model import (
     ColourBy,
@@ -23,13 +22,16 @@ from exploreit.gui.graph_model import (
     graph_data,
     hosts_by_frequency,
     legend,
+    node_label,
     positions,
     radius,
-    short_label,
+    top_prestige,
 )
-from exploreit.plots import network_figure, save_figure
+
+SLOW_LAYOUT_NODES = 300  # Kamada-Kawai takes seconds here and minutes at 1000
 
 if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
 
 LABELS_BY_DEFAULT_UP_TO = 80  # more labels than this turn into an unreadable carpet
@@ -46,6 +48,7 @@ class GraphTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.app = app
         self.data = GraphData({}, [])
+        self.prestige: dict[str, float] = {}  # set by the Ranking tab
         self.layout = tk.StringVar(value=Layout.LEVELS)
         self.colour_by = tk.StringVar(value=ColourBy.LEVEL)
         self.size_by = tk.StringVar(value=SizeBy.LINKS_IN)
@@ -53,6 +56,8 @@ class GraphTab(ttk.Frame):
         self.labels = tk.BooleanVar(value=True)
         self.edges = tk.BooleanVar(value=True)
         self.unvisited = tk.BooleanVar(value=False)
+        self.matrix_labels = tk.BooleanVar(value=False)
+        self.short_names: dict[str, str] = {}  # set by the Ranking tab
         self._build()
 
     def _build(self) -> None:
@@ -88,6 +93,7 @@ class GraphTab(ttk.Frame):
         toggles.pack(fill="x", pady=(0, 8))
         for text, flag, toggled in [
             ("Labels", self.labels, self.restyle),
+            ("Matrix names (P1, P2 …)", self.matrix_labels, self.restyle),
             ("Links", self.edges, self.restyle),
             ("Linked pages that were not visited", self.unvisited, self.reload),
         ]:
@@ -129,14 +135,33 @@ class GraphTab(ttk.Frame):
 
     def show(self, result: CrawlResult, path: Path) -> None:
         self.result, self.crawl_file = result, path
+        self.prestige = {}
+        if self.size_by.get() == SizeBy.PRESTIGE:
+            self.size_by.set(SizeBy.LINKS_IN)
+        self.reload()
+
+    def set_short_names(self, names: dict[str, str]) -> None:
+        """The names pages have in the adjacency matrix, shown with "Matrix names"."""
+        self.short_names = names
+        if hasattr(self, "data"):
+            self.restyle()
+
+    def show_prestige(self, scores: dict[str, float]) -> None:
+        """Size pages by their prestige and print it next to their names."""
+        self.prestige = scores
+        self.size_by.set(SizeBy.PRESTIGE)
+        self.labels.set(True)
         self.reload()
 
     def reload(self) -> None:
         """Rebuild the graph from the crawl, e.g. after toggling unvisited pages."""
         if not hasattr(self, "result"):
             return
-        self.data = graph_data(self.result, visited_only=not self.unvisited.get())
-        self.labels.set(len(self.data.nodes) <= LABELS_BY_DEFAULT_UP_TO)
+        self.data = graph_data(
+            self.result, visited_only=not self.unvisited.get(), prestige=self.prestige
+        )
+        if not self.prestige:
+            self.labels.set(len(self.data.nodes) <= LABELS_BY_DEFAULT_UP_TO)
         self.relayout()
 
     def relayout(self) -> None:
@@ -144,6 +169,17 @@ class GraphTab(ttk.Frame):
         if not hasattr(self, "result"):
             return
         data, layout = self.data, Layout(self.layout.get())
+        if (
+            layout is Layout.KAMADA_KAWAI
+            and len(data.nodes) > SLOW_LAYOUT_NODES
+            and messagebox.askyesno(
+                "Layout",
+                f"Kamada-Kawai compares every pair of the {len(data.nodes)} pages and can take "
+                "minutes on a graph this big. Use the much faster spring layout instead?",
+            )
+        ):
+            layout = Layout.SPRING
+            self.layout.set(layout)
         self.summary.configure(text="Laying out the graph …")
         self.app.tasks.run(lambda: positions(data, layout), self._display)
 
@@ -154,6 +190,8 @@ class GraphTab(ttk.Frame):
     def save_png(self) -> None:
         if not hasattr(self, "result"):
             return
+        from exploreit.plots import network_figure, save_figure
+
         style = self.canvas.style
         hosts = hosts_by_frequency(self.data)
         nodes = self.data.nodes
@@ -162,8 +200,16 @@ class GraphTab(ttk.Frame):
             self.data.edges,
             world,
             {url: category(node, style.colour_by, hosts).colour for url, node in nodes.items()},
-            {url: radius(node, style.size_by, style.node_scale) for url, node in nodes.items()},
-            {url: short_label(url, self.result.config.start_url) for url in nodes}
+            {
+                url: radius(node, style.size_by, style.node_scale, top_prestige(self.data))
+                for url, node in nodes.items()
+            },
+            {
+                url: node_label(
+                    node, self.result.config.start_url, style.size_by, style.short_names
+                )
+                for url, node in nodes.items()
+            }
             if style.labels
             else {},
             f"{self.result.config.start_url} · {self.result.config.describe()}",
@@ -189,6 +235,7 @@ class GraphTab(ttk.Frame):
             node_scale=self.node_scale.get(),
             labels=self.labels.get(),
             edges=self.edges.get(),
+            short_names=self.short_names if self.matrix_labels.get() else {},
             background=colours.inputbg,
             foreground=colours.inputfg,
             accent=colours.primary,

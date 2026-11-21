@@ -8,13 +8,14 @@ INVISIBLE_TAGS = ["script", "style", "noscript", "template", "svg"]
 META_NAME_ATTRIBUTES = ("name", "property", "itemprop")
 
 
-def extract_content(html: str, url: str) -> PageContent:
+def extract_content(html: str | BeautifulSoup, url: str) -> PageContent:
     """Return the text content of a page with whitespace collapsed.
 
     Meta tags are read from `name`, `property` (Open Graph) and `itemprop` (microdata)
-    attributes; keywords from all matching tags are merged.
+    attributes; keywords from all matching tags are merged. An already parsed page is
+    changed: its scripts and styles are removed, so read its links first.
     """
-    soup = BeautifulSoup(html, "lxml")
+    soup = html if isinstance(html, BeautifulSoup) else BeautifulSoup(html, "lxml")
     title = _clean(soup.title.get_text(" ")) if soup.title else ""
     descriptions = _meta(soup, "description", "og:description")
     keywords = [

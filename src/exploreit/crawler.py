@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Self
 
+from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 
 from exploreit.config import CrawlConfig
@@ -61,7 +62,11 @@ def crawl(
     stopped = False
 
     with Fetcher(
-        delay=config.delay, timeout=config.timeout, respect_robots=config.respect_robots
+        delay=config.delay,
+        timeout=config.timeout,
+        respect_robots=config.respect_robots,
+        user_agent=config.user_agent,
+        headers=config.headers,
     ) as fetcher:
         while frontier and len(pages) < config.max_pages:
             if should_stop():
@@ -85,18 +90,21 @@ def crawl(
                 depth=depth,
                 status_code=page.status_code,
                 content_type=page.content_type,
+                blocked_by=page.blocked_by,
             )
             pages.append(crawled)
             on_page(crawled)
 
             if not page.html:
                 continue
+            soup = BeautifulSoup(page.html, "lxml")  # parsed once for links and content
+            links = extract_links(soup, page.url, config.link_mode)
             if config.store_content:
-                contents.append(extract_content(page.html, url))
-            for link in extract_links(page.html, page.url, config.link_mode):
+                contents.append(extract_content(soup, url))
+            for link in links:
                 if link.url in (url, page.url):
                     continue  # a link to the page itself, e.g. "#top", is not an edge
-                edges.append(Edge(source=url, target=link.url, kind=link.kind))
+                edges.append(Edge(source=url, target=link.url, kind=link.kind, region=link.region))
                 if depth < config.max_depth and is_in_scope(
                     link.url, config.start_url, config.scope
                 ):

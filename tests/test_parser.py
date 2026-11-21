@@ -1,7 +1,8 @@
 import pytest
 
 from exploreit.models import Link, LinkKind
-from exploreit.parser import LinkMode, extract_links
+from exploreit.options import LinkMode
+from exploreit.parser import extract_links
 
 PAGE_URL = "https://example.com/blog/post"
 
