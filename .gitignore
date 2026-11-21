@@ -33,6 +33,15 @@ data/
 *.md
 !README.md
 *.pdf
+docs/
+
+# Screenshots, charts and other images made while using the app
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.bmp
 
 # OS / IDE
 .DS_Store
