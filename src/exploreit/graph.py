@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel
 
 from exploreit.crawler import CrawlResult
+from exploreit.formatting import format_duration
 
 
 class GraphStats(BaseModel):
@@ -97,12 +98,6 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
         crawl_seconds=round(result.duration, 1),
         stopped=result.stopped,
     )
-
-
-def format_duration(seconds: float) -> str:
-    """Format seconds as "m:ss", e.g. 75.4 -> "1:15"."""
-    minutes, rest = divmod(round(seconds), 60)
-    return f"{minutes}:{rest:02d}"
 
 
 def click_tree(result: CrawlResult) -> dict[str, list[str]]:

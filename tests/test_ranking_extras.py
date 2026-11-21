@@ -7,7 +7,8 @@ from scipy.stats import kendalltau
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent, Region
-from exploreit.parser import LinkMode, extract_links
+from exploreit.options import LinkMode
+from exploreit.parser import extract_links
 from exploreit.ranking.graph import LinkGraph, duplicates, link_graph
 from exploreit.ranking.matrix import trusted_matrix
 from exploreit.ranking.methods import (

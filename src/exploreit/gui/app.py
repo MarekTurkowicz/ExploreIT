@@ -1,14 +1,16 @@
 """The ExploreIT window: one tab per task, a status bar, theme and font size controls."""
 
+from __future__ import annotations
+
 import tkinter as tk
 import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import ttk
+from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 from ttkbootstrap.style.theme import Colors
 
-from exploreit.crawler import CrawlResult
 from exploreit.gui.compare_tab import CompareTab
 from exploreit.gui.crawl_tab import CrawlTab
 from exploreit.gui.experiments_tab import ExperimentsTab
@@ -16,11 +18,32 @@ from exploreit.gui.graph_canvas import LABEL_FONT
 from exploreit.gui.graph_tab import GraphTab
 from exploreit.gui.ranking_tab import RankingTab
 from exploreit.gui.results_tab import ContentTab, PagesTab, ResultsTab
-from exploreit.gui.widgets import TaskRunner
+from exploreit.gui.widgets import Preloader, TaskRunner
+
+if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
 
 LIGHT_THEME, DARK_THEME = "nord-light", "nord-dark"
 DEFAULT_FONT_SIZE = 18
 FONT_SIZES = range(10, 31)
+
+# What each part of the window needs, heaviest libraries included. They load in the
+# background, in this order, right after the window appears: the crawl first, since
+# that is what a session starts with, then what showing a crawl needs, then charts.
+CRAWL_MODULES = ["pydantic", "httpx", "bs4", "lxml.etree", "exploreit.config", "exploreit.crawler"]
+RESULT_MODULES = ["exploreit.graph", "exploreit.export", "exploreit.storage", "networkx"]
+RANKING_MODULES = ["numpy", "exploreit.ranking.methods"]
+CHART_MODULES = ["pandas", "matplotlib.figure", "exploreit.plots"]
+LAYOUT_MODULES = ["scipy.sparse"]  # networkx needs it for big graph layouts
+EXPERIMENT_MODULES = ["exploreit.experiments"]
+WARM_UP = [
+    *CRAWL_MODULES,
+    *RESULT_MODULES,
+    *RANKING_MODULES,
+    *CHART_MODULES,
+    *LAYOUT_MODULES,
+    *EXPERIMENT_MODULES,
+]
 
 UI_FONTS = ["TkDefaultFont", "TkTextFont", "TkMenuFont", "TkCaptionFont", "TkTooltipFont"]
 
@@ -32,6 +55,7 @@ class ExploreApp:
         self.root = root
         self.output_dir = tk.StringVar(value=str(data_dir.resolve()))
         self.tasks = TaskRunner(root)
+        self.preloader = Preloader()
         self.status = tk.StringVar(value=f"Results are saved in {data_dir.resolve()}")
         self.dark = tk.BooleanVar(value=False)
         self.font_size = tk.IntVar(value=DEFAULT_FONT_SIZE)
@@ -60,7 +84,14 @@ class ExploreApp:
         ]
         for tab, title in tabs:
             self.notebook.add(tab, text=title)
-        self.notebook.bind("<<NotebookTabChanged>>", lambda _: self.compare_tab.refresh())
+        self.notebook.bind("<<NotebookTabChanged>>", lambda _: self._tab_changed())
+        self._tab_modules: dict[str, list[str]] = {
+            str(self.crawl_tab): CRAWL_MODULES,
+            str(self.results_tab): RESULT_MODULES + CHART_MODULES,
+            str(self.graph_tab): RESULT_MODULES + LAYOUT_MODULES,
+            str(self.ranking_tab): RANKING_MODULES + CHART_MODULES,
+            str(self.experiments_tab): CRAWL_MODULES + EXPERIMENT_MODULES + CHART_MODULES,
+        }
         self._build_status_bar()
         self._style_inputs()
 
@@ -191,6 +222,11 @@ class ExploreApp:
                 "TkDefaultFont",
             )
 
+    def _tab_changed(self) -> None:
+        """Load what the opened tab needs first, before the user presses anything."""
+        self.preloader.prefer(self._tab_modules.get(self.notebook.select(), []))
+        self.compare_tab.refresh()
+
     def show_crawl(self, result: CrawlResult, path: Path) -> None:
         """Show a crawl, fresh or opened from disk, in every tab that describes it."""
         self.results_tab.show(result, path)
@@ -208,14 +244,6 @@ def _maximise(root: tk.Tk) -> None:
         root.state("zoomed")  # Windows and macOS
     except tk.TclError:
         root.attributes("-zoomed", True)  # X11
-
-
-def _warm_up() -> None:
-    """Import the libraries the charts and the graph need, so their first use is quick."""
-    import importlib
-
-    for module in ("matplotlib.figure", "networkx", "pandas", "scipy.sparse"):
-        importlib.import_module(module)
 
 
 def _all_widgets[W: tk.Misc](parent: tk.Misc, kind: type[W]) -> list[W]:
@@ -243,5 +271,5 @@ def run_app(data_dir: Path = Path("data")) -> None:
     root.after(800, lambda: root.attributes("-topmost", False))
     root.focus_force()
     # Show the window first, then load the slow libraries while the user looks around.
-    root.after(300, lambda: app.tasks.run(_warm_up, lambda _: None))
+    root.after(100, lambda: app.preloader.load(WARM_UP))
     root.mainloop()

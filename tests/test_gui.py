@@ -12,8 +12,8 @@ from exploreit.crawler import CrawlResult
 from exploreit.gui.app import DARK_THEME, ExploreApp, create_window
 from exploreit.gui.widgets import Table
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
+from exploreit.options import ContentField
 from exploreit.ranking.methods import METHODS
-from exploreit.storage import ContentField
 
 SITE = "https://example.com"
 

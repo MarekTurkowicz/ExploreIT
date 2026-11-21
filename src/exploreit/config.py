@@ -4,9 +4,8 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from exploreit.fetcher import USER_AGENT
 from exploreit.frontier import Strategy
-from exploreit.parser import LinkMode
+from exploreit.options import USER_AGENT, LinkMode
 from exploreit.urls import Scope, normalize_url
 
 

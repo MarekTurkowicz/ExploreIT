@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import gc
+import importlib
 import queue
+import sys
 import threading
 import time
 import tkinter as tk
 import tkinter.font as tkfont
+from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from datetime import datetime
 from functools import partial
@@ -15,14 +18,62 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
-from pydantic import ValidationError
-
 if TYPE_CHECKING:
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
 
 POLL_MS = 50
 COLLECT_EVERY_S = 2.0
+
+
+class Preloader:
+    """Imports modules in a background thread, so that their first use is instant.
+
+    The window appears before the libraries doing the real work (HTTP, HTML parsing,
+    numpy, matplotlib) have loaded. They then load one by one in the order they are
+    likely to be needed, and `prefer` moves the modules of whatever the user opens
+    next to the front of the queue. Importing a module already imported costs nothing.
+    """
+
+    def __init__(self) -> None:
+        self._queue: deque[str] = deque()
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self.loaded: list[str] = []  # in the order they were imported, for the status bar
+
+    def load(self, modules: Iterable[str]) -> None:
+        """Queue modules after those already waiting."""
+        with self._lock:
+            self._queue.extend(module for module in modules if module not in self._queue)
+        self._start()
+
+    def prefer(self, modules: Iterable[str]) -> None:
+        """Load these modules before everything else still waiting."""
+        with self._lock:
+            for module in reversed(list(modules)):
+                if module in self._queue:
+                    self._queue.remove(module)
+                self._queue.appendleft(module)
+        self._start()
+
+    def _start(self) -> None:
+        if self._thread is None or not self._thread.is_alive():
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+
+    def _run(self) -> None:
+        while True:
+            with self._lock:
+                if not self._queue:
+                    return
+                module = self._queue.popleft()
+            if module in sys.modules:
+                continue
+            try:
+                importlib.import_module(module)
+            except Exception:
+                continue
+            self.loaded.append(module)
 
 
 class TaskRunner:
@@ -173,7 +224,7 @@ class ChartPanel(ttk.Frame):
         # fit, instead of forcing the window to its own size in inches.
         widget.configure(width=200, height=150)
         widget.pack(fill="both", expand=True)
-        canvas.draw()
+        canvas.draw_idle()  # once, after the layout has sized the widget
         return canvas
 
     def _match_theme(self, figure: Figure) -> None:
@@ -229,6 +280,8 @@ def timestamp() -> str:
 
 def describe_errors(error: ValueError) -> str:
     """Readable text for a pydantic validation error or any other ValueError."""
+    from pydantic import ValidationError
+
     if isinstance(error, ValidationError):
         return "\n".join(f"{problem['loc'][0]}: {problem['msg']}" for problem in error.errors())
     return str(error)

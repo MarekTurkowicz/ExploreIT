@@ -4,11 +4,11 @@ import csv
 import sqlite3
 from collections.abc import Sequence
 from contextlib import closing
-from enum import StrEnum
 from pathlib import Path
 
 from exploreit.crawler import CrawlResult
 from exploreit.models import PageContent
+from exploreit.options import ContentField
 
 KEYWORD_SEPARATOR = ", "
 
@@ -34,16 +34,6 @@ CREATE TABLE links (
 );
 CREATE INDEX links_target ON links (target);
 """
-
-
-class ContentField(StrEnum):
-    """A column that can be saved for every page."""
-
-    URL = "url"
-    TITLE = "title"
-    DESCRIPTION = "description"
-    KEYWORDS = "keywords"
-    BODY = "body"
 
 
 def write_csv(

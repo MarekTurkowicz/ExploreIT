@@ -1,22 +1,13 @@
 """Link extraction from HTML pages."""
 
 import re
-from enum import StrEnum
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup, Tag
 
 from exploreit.models import Link, LinkKind, Region
+from exploreit.options import LinkMode
 from exploreit.urls import normalize_url
-
-
-class LinkMode(StrEnum):
-    """Which kinds of links the crawler follows."""
-
-    HYPERLINKS = "hyperlinks"
-    IMAGES = "images"
-    ALL = "all"
-
 
 # Element name -> (attribute holding the URL, kind of link).
 LINK_ATTRIBUTES: dict[str, tuple[str, LinkKind]] = {

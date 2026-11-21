@@ -4,7 +4,8 @@ import httpx
 import pytest
 import respx
 
-from exploreit.fetcher import USER_AGENT, Fetcher, FetchError, bot_protection
+from exploreit.fetcher import Fetcher, FetchError, bot_protection
+from exploreit.options import USER_AGENT
 
 SITE = "https://example.com"
 PAGE = f"{SITE}/page"

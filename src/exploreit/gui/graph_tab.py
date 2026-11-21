@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 
-from exploreit.crawler import CrawlResult
 from exploreit.gui.graph_canvas import GraphCanvas, Style, describe
 from exploreit.gui.graph_model import (
     ColourBy,
@@ -32,6 +31,7 @@ from exploreit.gui.graph_model import (
 SLOW_LAYOUT_NODES = 300  # Kamada-Kawai takes seconds here and minutes at 1000
 
 if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
 
 LABELS_BY_DEFAULT_UP_TO = 80  # more labels than this turn into an unreadable carpet

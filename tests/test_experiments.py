@@ -11,7 +11,7 @@ from exploreit.experiments import (
     run_experiments,
 )
 from exploreit.frontier import Strategy
-from exploreit.parser import LinkMode
+from exploreit.options import LinkMode
 from exploreit.urls import Scope
 
 SITE = "https://example.com/"

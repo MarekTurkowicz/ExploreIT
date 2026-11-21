@@ -11,11 +11,10 @@ from urllib.robotparser import RobotFileParser
 import httpx
 from bs4 import UnicodeDammit
 
-from exploreit import __version__
 from exploreit.models import HTML_TYPES, Page
+from exploreit.options import USER_AGENT
 from exploreit.urls import normalize_url
 
-USER_AGENT = f"ExploreIT/{__version__}"
 ALLOW_ALL: list[str] = []
 DISALLOW_ALL = ["User-agent: *", "Disallow: /"]
 

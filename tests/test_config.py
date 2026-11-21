@@ -3,7 +3,7 @@ from pydantic import ValidationError
 
 from exploreit.config import CrawlConfig, parse_headers
 from exploreit.frontier import Strategy
-from exploreit.parser import LinkMode
+from exploreit.options import LinkMode
 from exploreit.urls import Scope
 
 

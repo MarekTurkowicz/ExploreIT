@@ -11,15 +11,10 @@ from tkinter.scrolledtext import ScrolledText
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from pydantic import ValidationError
-
-from exploreit.crawler import CrawlResult
-from exploreit.export import write_gexf, write_html
-from exploreit.graph import click_tree, compute_stats, shortest_levels
 from exploreit.gui.widgets import ChartPanel, Table
-from exploreit.storage import write_csv, write_sqlite
 
 if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
 
 
@@ -67,6 +62,10 @@ class ResultsTab(ttk.Frame):
         panes.add(right, weight=1)
 
     def open_file(self, path: Path) -> None:
+        from pydantic import ValidationError
+
+        from exploreit.crawler import CrawlResult
+
         try:
             result = CrawlResult.load(path)
         except (OSError, ValidationError) as error:
@@ -75,6 +74,8 @@ class ResultsTab(ttk.Frame):
         self.app.show_crawl(result, path)
 
     def show(self, result: CrawlResult, path: Path) -> None:
+        from exploreit.graph import compute_stats
+
         self.result, self.crawl_file = result, path
         self.file_label.configure(text=path.name)  # the full path is in the status bar
         self.stats.set_rows(["Metric", "Value"], compute_stats(result).summary(), widths=[190])
@@ -86,11 +87,15 @@ class ResultsTab(ttk.Frame):
             button.state(["!disabled"])
 
     def open_graph(self) -> None:
+        from exploreit.export import write_html
+
         html_file = self.crawl_file.with_suffix(".html")
         write_html(self.result, html_file)
         webbrowser.open(html_file.resolve().as_uri())
 
     def export_gexf(self) -> None:
+        from exploreit.export import write_gexf
+
         gexf_file = self.crawl_file.with_suffix(".gexf")
         write_gexf(self.result, gexf_file)
         self.app.set_status(f"Saved {gexf_file}")
@@ -115,6 +120,8 @@ class ResultsTab(ttk.Frame):
             self.open_file(Path(name))
 
     def _fill_tree(self, result: CrawlResult) -> None:
+        from exploreit.graph import click_tree
+
         self.tree.delete(*self.tree.get_children())
         children = click_tree(result)
         start = result.config.start_url
@@ -138,6 +145,8 @@ class PagesTab(ttk.Frame):
         self.table.pack(fill="both", expand=True)
 
     def show(self, result: CrawlResult) -> None:
+        from exploreit.graph import shortest_levels
+
         levels = shortest_levels(result)
         out_links = Counter(edge.source for edge in result.edges)
         in_links = Counter(edge.target for edge in result.edges)
@@ -225,11 +234,15 @@ class ContentTab(ttk.Frame):
             )
 
     def save_csv(self, path: Path) -> None:
+        from exploreit.storage import write_csv
+
         crawl_tab = self.app.crawl_tab
         write_csv(self.result.contents, path, crawl_tab.csv_fields(), crawl_tab.csv_separator())
         self.app.set_status(f"Saved {len(self.result.contents)} pages to {path}")
 
     def save_sqlite(self, path: Path) -> None:
+        from exploreit.storage import write_sqlite
+
         write_sqlite(self.result, path)
         self.app.set_status(f"Saved the database to {path}")
 

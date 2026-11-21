@@ -10,6 +10,7 @@ from string import Template
 from typing import TYPE_CHECKING
 
 from exploreit.crawler import CrawlResult
+from exploreit.formatting import LEVEL_COLOURS
 from exploreit.graph import shortest_levels
 
 if TYPE_CHECKING:
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
 
 # Pinned so the page keeps working the same way; loaded from a CDN when the page opens.
 VIS_NETWORK = "https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"
-LEVEL_COLOURS = ["#0d366b", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4"]
 ERROR_COLOUR = "#d03b3b"
 UNVISITED_COLOUR = "#c3c2b7"
 EDGE_COLOURS = {"anchor": "#898781", "image": "#1baf7a", "resource": "#eda100"}

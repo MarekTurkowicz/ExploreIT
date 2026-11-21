@@ -3,9 +3,10 @@ from typing import Any
 import numpy as np
 import pytest
 
+from exploreit.options import Dangling, Normalization
 from exploreit.ranking.graph import LinkGraph
 from exploreit.ranking.matrix import adjacency_matrix
-from exploreit.ranking.prestige import Dangling, Normalization, PrestigeResult, prestige
+from exploreit.ranking.prestige import PrestigeResult, prestige
 
 
 def graph(*links: str) -> LinkGraph:

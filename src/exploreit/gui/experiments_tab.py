@@ -1,4 +1,8 @@
-"""Experiments tab: crawl with many parameter combinations and compare the graphs."""
+"""Experiments tab: crawl with many parameter combinations and compare the graphs.
+
+The crawling and comparing modules are imported where they are used: the window
+loads them in the background after it appears (see `app.warm_up`).
+"""
 
 from __future__ import annotations
 
@@ -12,24 +16,17 @@ from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 
-from exploreit.config import CrawlConfig
-from exploreit.crawler import CrawlResult
-from exploreit.experiments import (
-    SUMMARY_COLUMNS,
-    experiment_configs,
-    experiment_name,
-    run_experiments,
-    save_comparison,
-)
+from exploreit.formatting import format_duration
 from exploreit.frontier import Strategy
-from exploreit.graph import format_duration
 from exploreit.gui.widgets import ChartPanel, Table, describe_errors, show_error, timestamp
-from exploreit.parser import LinkMode
+from exploreit.options import LinkMode
 from exploreit.urls import Scope
 
 if TYPE_CHECKING:
     import pandas as pd
 
+    from exploreit.config import CrawlConfig
+    from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
 
 SHARED_SETTINGS = {"max_depth", "max_pages", "delay", "timeout", "respect_robots"}
@@ -103,6 +100,8 @@ class ExperimentsTab(ttk.Frame):
             self.app.set_status("Stopping after the current page …")
 
     def run(self) -> None:
+        from exploreit import experiments
+
         if self.running or self.app.crawl_tab.running:
             return
         try:
@@ -116,7 +115,7 @@ class ExperimentsTab(ttk.Frame):
             return
 
         strategies, scopes, link_modes = chosen
-        configs = experiment_configs(
+        configs = experiments.experiment_configs(
             base.start_url,
             strategies,
             scopes,
@@ -136,19 +135,23 @@ class ExperimentsTab(ttk.Frame):
 
     def _experiment(self, configs: list[CrawlConfig], out_dir: Path) -> tuple[pd.DataFrame, Path]:
         """Runs in a background thread."""
-        results = run_experiments(
+        from exploreit import experiments
+
+        results = experiments.run_experiments(
             configs,
             out_dir,
             on_crawl=lambda c, r: self.app.tasks.call(self._crawled, c, r),
             should_stop=self._stop_requested.is_set,
         )
-        return save_comparison(results, out_dir), out_dir
+        return experiments.save_comparison(results, out_dir), out_dir
 
     def _crawled(self, config: CrawlConfig, result: CrawlResult) -> None:
+        from exploreit import experiments
+
         self.progress.step(1)
         elapsed = format_duration(time.monotonic() - self._started)
         self.current.configure(
-            text=f"⏱ {elapsed} · {experiment_name(config)}: {len(result.pages)} pages"
+            text=f"⏱ {elapsed} · {experiments.experiment_name(config)}: {len(result.pages)} pages"
         )
 
     def _stop(self) -> None:
@@ -161,6 +164,8 @@ class ExperimentsTab(ttk.Frame):
         show_error(error)
 
     def _finish(self, outcome: tuple[pd.DataFrame, Path]) -> None:
+        from exploreit import experiments
+
         table, out_dir = outcome
         self._stop()
         mark = "■ Stopped" if self._stop_requested.is_set() else "✔"
@@ -168,9 +173,11 @@ class ExperimentsTab(ttk.Frame):
         self.current.configure(text=f"{mark} {elapsed} · {len(table)} crawls")
         rows = (
             [f"{value:.1f}" if isinstance(value, float) else value for value in row]
-            for row in table[SUMMARY_COLUMNS].itertuples(index=False)
+            for row in table[experiments.SUMMARY_COLUMNS].itertuples(index=False)
         )
-        self.table.set_rows([c.replace("_", " ") for c in SUMMARY_COLUMNS], rows, widths=[90] * 11)
+        self.table.set_rows(
+            [c.replace("_", " ") for c in experiments.SUMMARY_COLUMNS], rows, widths=[90] * 11
+        )
         from exploreit.plots import comparison_figure
 
         self.chart.show(comparison_figure(table))

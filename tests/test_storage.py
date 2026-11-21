@@ -6,7 +6,8 @@ from pathlib import Path
 from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult
 from exploreit.models import CrawledPage, Edge, LinkKind, PageContent
-from exploreit.storage import ContentField, write_csv, write_sqlite
+from exploreit.options import ContentField
+from exploreit.storage import write_csv, write_sqlite
 
 START = "https://example.com/"
 CONTENTS = [

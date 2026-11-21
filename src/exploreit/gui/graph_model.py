@@ -11,10 +11,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import sqrt
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from exploreit.crawler import CrawlResult
-from exploreit.export import LEVEL_COLOURS, build_graph
+from exploreit.formatting import LEVEL_COLOURS
+
+if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
 
 UNVISITED = "#a8a69f"
 CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"]
@@ -81,6 +84,8 @@ def graph_data(
     visited_only: bool = True,
     prestige: Mapping[str, float] = MappingProxyType({}),
 ) -> GraphData:
+    from exploreit.export import build_graph
+
     graph = build_graph(result, visited_only=visited_only)
     nodes = {
         url: Node(

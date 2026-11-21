@@ -27,13 +27,11 @@ from exploreit.experiments import (
     save_comparison,
 )
 from exploreit.export import write_gexf, write_html
-from exploreit.fetcher import USER_AGENT
 from exploreit.frontier import Strategy
 from exploreit.graph import compute_stats
 from exploreit.models import CrawledPage
-from exploreit.parser import LinkMode
-from exploreit.ranking.prestige import Dangling, Normalization
-from exploreit.storage import ContentField, write_csv, write_sqlite
+from exploreit.options import USER_AGENT, ContentField, Dangling, LinkMode, Normalization
+from exploreit.storage import write_csv, write_sqlite
 from exploreit.urls import Scope
 
 app = typer.Typer(help="ExploreIT: web structure exploration toolkit.", no_args_is_help=True)

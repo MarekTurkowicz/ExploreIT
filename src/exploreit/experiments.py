@@ -11,7 +11,7 @@ from exploreit.config import CrawlConfig
 from exploreit.crawler import CrawlResult, crawl
 from exploreit.frontier import Strategy
 from exploreit.graph import GraphStats, compute_stats
-from exploreit.parser import LinkMode
+from exploreit.options import LinkMode
 from exploreit.urls import Scope
 
 if TYPE_CHECKING:

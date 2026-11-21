@@ -9,28 +9,17 @@ from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 
-from exploreit.crawler import CrawlResult
 from exploreit.gui.widgets import ChartPanel, Table
-from exploreit.ranking.graph import LinkGraph, check_requirements, link_graph, shortest_cycle
-from exploreit.ranking.matrix import (
-    adjacency_matrix,
-    short_labels,
-    write_legend_csv,
-    write_matrix_csv,
-)
-from exploreit.ranking.methods import (
-    METHODS,
-    QUERY_METHOD,
-    Comparison,
-    Settings,
-    compare,
-    format_tau,
-    write_ranking_csv,
-)
-from exploreit.ranking.prestige import Dangling, Normalization
+from exploreit.options import Dangling, Normalization
 
 if TYPE_CHECKING:
+    from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
+    from exploreit.ranking.graph import LinkGraph
+    from exploreit.ranking.methods import (
+        Comparison,
+        Settings,
+    )
 
 WEIGHTS = {"links": "0.5", "text": "0.3", "bridges": "0.2"}
 
@@ -52,7 +41,7 @@ class RankingTab(ttk.Frame):
         self.smoothing = tk.StringVar(value="0.0")
         self.jump = tk.StringVar(value="0.0")
         self.max_iterations = tk.StringVar(value="200")
-        self.on_graph = tk.StringVar(value=METHODS[-1].name)
+        self.on_graph = tk.StringVar(value="ExploreIT rank")
         self.cascade_words = tk.StringVar(value="10")
         self.merge = tk.BooleanVar(value=True)
         self.query = tk.StringVar(value="")
@@ -133,13 +122,11 @@ class RankingTab(ttk.Frame):
         self.compute_button.pack(side="left")
         self.compute_button.state(["disabled"])
         ttk.Label(actions, text="Show on graph").pack(side="left", padx=(18, 6))
-        ttk.Combobox(
-            actions,
-            textvariable=self.on_graph,
-            values=[method.name for method in [*METHODS, QUERY_METHOD]],
-            state="readonly",
-            width=18,
-        ).pack(side="left")
+        # The method names come with the ranking code, loaded in the background.
+        self.method_choice = ttk.Combobox(
+            actions, textvariable=self.on_graph, state="readonly", width=18
+        )
+        self.method_choice.pack(side="left")
         self.result_buttons = [
             ttk.Button(actions, text="Show", command=self.show_on_graph),
             ttk.Button(actions, text="Save rankings (CSV)", command=self.save_rankings),
@@ -168,8 +155,13 @@ class RankingTab(ttk.Frame):
 
     def rebuild(self) -> None:
         """Build the graph again from the crawl, e.g. after the duplicates switch changed."""
+        from exploreit.ranking.graph import check_requirements, link_graph, shortest_cycle
+        from exploreit.ranking.matrix import short_labels
+        from exploreit.ranking.methods import METHODS, QUERY_METHOD
+
         if not hasattr(self, "result"):
             return
+        self.method_choice.configure(values=[method.name for method in [*METHODS, QUERY_METHOD]])
         self.graph = link_graph(self.result, merge_duplicates=self.merge.get())
         lines = [
             f"{'✔' if check.met else '✘'}  {check.description}: {check.actual}"
@@ -187,6 +179,8 @@ class RankingTab(ttk.Frame):
 
     def settings(self) -> Settings:
         """Raises ValueError for numbers that cannot be read or are out of range."""
+        from exploreit.ranking.methods import Settings
+
         smoothing = float(self.smoothing.get())
         jump = float(self.jump.get())
         if not 0 <= jump < 1:
@@ -210,6 +204,8 @@ class RankingTab(ttk.Frame):
         )
 
     def compute(self) -> None:
+        from exploreit.ranking.methods import compare
+
         try:
             settings = self.settings()
         except ValueError as error:
@@ -221,6 +217,8 @@ class RankingTab(ttk.Frame):
 
     def _display(self, comparison: Comparison) -> None:
         from exploreit.plots import convergence_figure
+        from exploreit.ranking.matrix import short_labels
+        from exploreit.ranking.methods import QUERY_METHOD, format_tau
 
         self.comparison = comparison
         self.compute_button.state(["!disabled"])
@@ -287,11 +285,20 @@ class RankingTab(ttk.Frame):
         self.app.notebook.select(self.app.graph_tab)
 
     def save_rankings(self) -> None:
+        from exploreit.ranking.methods import write_ranking_csv
+
         path = self.crawl_file.with_name(f"{self.crawl_file.stem}-ranking.csv")
         write_ranking_csv(self.comparison, path)
         self.app.set_status(f"Saved {path}")
 
     def save_matrices(self) -> None:
+        from exploreit.ranking.matrix import (
+            adjacency_matrix,
+            short_labels,
+            write_legend_csv,
+            write_matrix_csv,
+        )
+
         labels = short_labels(self.graph)
         stem = self.crawl_file.with_name(self.crawl_file.stem)
         write_matrix_csv(adjacency_matrix(self.graph), labels, Path(f"{stem}-A.csv"))

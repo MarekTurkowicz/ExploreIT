@@ -13,11 +13,12 @@ from pathlib import Path
 
 import numpy as np
 
+from exploreit.options import Dangling, Normalization
 from exploreit.ranking.bridges import betweenness
 from exploreit.ranking.eigen import leading_eigenvector
 from exploreit.ranking.graph import LinkGraph
 from exploreit.ranking.matrix import adjacency_matrix, short_labels, trusted_matrix
-from exploreit.ranking.prestige import Dangling, Normalization, prestige
+from exploreit.ranking.prestige import prestige
 from exploreit.ranking.query import query_match, query_words
 from exploreit.ranking.words import word_cascade
 

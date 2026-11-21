@@ -12,20 +12,17 @@ from typing import TYPE_CHECKING
 
 import ttkbootstrap as tb
 
-from exploreit.config import CrawlConfig, parse_headers
-from exploreit.crawler import CrawlResult, crawl
-from exploreit.export import write_html
-from exploreit.fetcher import USER_AGENT
+from exploreit.formatting import format_duration
 from exploreit.frontier import Strategy
-from exploreit.graph import format_duration
 from exploreit.gui.widgets import describe_errors, show_error, timestamp
-from exploreit.models import CrawledPage
-from exploreit.parser import LinkMode
-from exploreit.storage import ContentField, write_csv, write_sqlite
+from exploreit.options import USER_AGENT, ContentField, LinkMode
 from exploreit.urls import Scope
 
 if TYPE_CHECKING:
+    from exploreit.config import CrawlConfig
+    from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
+    from exploreit.models import CrawledPage
 
 SEPARATORS = {"comma ( , )": ",", "semicolon ( ; )": ";", "tab": "\t"}
 TIMER_MS = 250
@@ -224,6 +221,8 @@ class CrawlTab(ttk.Frame):
             ValueError: If a setting is missing or invalid (pydantic's ValidationError
                 is a ValueError too).
         """
+        from exploreit.config import CrawlConfig, parse_headers
+
         return CrawlConfig.model_validate(
             {
                 "start_url": self.url.get().strip(),
@@ -273,6 +272,10 @@ class CrawlTab(ttk.Frame):
         self, config: CrawlConfig, fields: list[ContentField], separator: str, path: Path
     ) -> tuple[CrawlResult, Path]:
         """Runs in a background thread, so it must not touch any Tk widget or variable."""
+        from exploreit.crawler import crawl
+        from exploreit.export import write_html
+        from exploreit.storage import write_csv, write_sqlite
+
         result = crawl(
             config,
             on_page=lambda page: self.app.tasks.call(self._log_page, page),
