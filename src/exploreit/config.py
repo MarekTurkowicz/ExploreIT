@@ -27,7 +27,7 @@ def parse_headers(lines: str | list[str]) -> dict[str, str]:
     return headers
 
 
-HEADER_NAME = re.compile(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+")  # an HTTP token
+HEADER_NAME = re.compile(r"[A-Za-z0-9!#$%&'*+.^_`|~-]+")
 
 
 class CrawlConfig(BaseModel):
@@ -46,7 +46,7 @@ class CrawlConfig(BaseModel):
     respect_robots: bool = True
     store_content: bool = False
     user_agent: str = Field(default=USER_AGENT, min_length=1)
-    headers: dict[str, str] = Field(default_factory=dict)  # extra request headers
+    headers: dict[str, str] = Field(default_factory=dict)
 
     def describe(self) -> str:
         """One-line summary of the parameters, e.g. "bfs · server · hyperlinks · depth 3"."""

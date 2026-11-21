@@ -41,7 +41,7 @@ class ExperimentsTab(ttk.Frame):
         self.running = False
         self._stop_requested = threading.Event()
         self._started = 0.0
-        self.boxes: list[ttk.Checkbutton] = []  # locked while experiments run
+        self.boxes: list[ttk.Checkbutton] = []
         ttk.Label(
             self,
             text="Uses the start URL, depth, page limit and delay from the Crawl tab. "

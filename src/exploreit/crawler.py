@@ -28,8 +28,8 @@ class CrawlResult(BaseModel):
     edges: list[Edge]
     failed: dict[str, str]
     contents: list[PageContent] = Field(default_factory=list)
-    duration: float = 0.0  # seconds the crawl took
-    stopped: bool = False  # True if the user stopped the crawl before it finished
+    duration: float = 0.0
+    stopped: bool = False
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,8 +79,6 @@ def crawl(
                 failed[url] = str(error)
                 continue
             if depth == 0 and page.url != url:
-                # The start page redirected, e.g. http://site to https://www.site/.
-                # Crawl from where the site really is, so the scope check matches its links.
                 url = page.url
                 config = config.model_copy(update={"start_url": url})
                 frontier.mark_seen(url)
@@ -97,13 +95,13 @@ def crawl(
 
             if not page.html:
                 continue
-            soup = BeautifulSoup(page.html, "lxml")  # parsed once for links and content
+            soup = BeautifulSoup(page.html, "lxml")
             links = extract_links(soup, page.url, config.link_mode)
             if config.store_content:
                 contents.append(extract_content(soup, url))
             for link in links:
                 if link.url in (url, page.url):
-                    continue  # a link to the page itself, e.g. "#top", is not an edge
+                    continue
                 edges.append(Edge(source=url, target=link.url, kind=link.kind, region=link.region))
                 if depth < config.max_depth and is_in_scope(
                     link.url, config.start_url, config.scope

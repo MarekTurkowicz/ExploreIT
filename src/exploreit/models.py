@@ -19,7 +19,7 @@ class Region(StrEnum):
     """The part of a page a link stands in, from the most to the least prominent."""
 
     CONTENT = "content"
-    NAVIGATION = "navigation"  # menus, headers and sidebars
+    NAVIGATION = "navigation"
     FOOTER = "footer"
 
 
@@ -42,7 +42,7 @@ class Page(BaseModel):
     status_code: int
     content_type: str
     html: str = ""
-    blocked_by: str = ""  # anti-bot service that refused the request, e.g. "DataDome"
+    blocked_by: str = ""
 
 
 class CrawledPage(BaseModel):
@@ -70,7 +70,7 @@ class Edge(BaseModel):
     source: str
     target: str
     kind: LinkKind
-    region: Region = Region.CONTENT  # crawls saved before regions were kept count as content
+    region: Region = Region.CONTENT
 
 
 class PageContent(BaseModel):

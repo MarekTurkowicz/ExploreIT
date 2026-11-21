@@ -20,12 +20,6 @@ def edge(source: str, target: str, kind: LinkKind = LinkKind.ANCHOR) -> Edge:
     return Edge(source=url(source), target=url(target), kind=kind)
 
 
-#   /      -> /a, /b, https://other.org/x
-#   /a     -> /, /a/1, /logo.png, /missing
-#   /a/1   -> /b
-#   /b     -> (no links)
-# /b was found by a depth-first crawl through /a/1, so its recorded depth is 3,
-# but it is one click away from the start page.
 RESULT = CrawlResult(
     config=CrawlConfig(start_url=SITE),
     pages=[

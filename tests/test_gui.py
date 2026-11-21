@@ -180,7 +180,7 @@ def test_graph_styles_and_legend(app: ExploreApp, tmp_path: Path) -> None:
     settle(app)
 
     legend_rows = app.graph_tab.legend.winfo_children()
-    assert len(legend_rows) == 1  # every page is on example.com
+    assert len(legend_rows) == 1
     assert app.graph_tab.summary.cget("text") == "2 pages · 1 link"
 
 
@@ -216,7 +216,7 @@ def test_theme_and_font_size(app: ExploreApp) -> None:
     app.set_theme(DARK_THEME)
     app.set_font_size(40)
 
-    assert app.font_size.get() == 30  # clamped to the largest size
+    assert app.font_size.get() == 30
     assert app.root.style.theme_use() == DARK_THEME
     colours = app.theme_colours()
     assert app.root.style.lookup("TSpinbox", "fieldbackground") == colours.inputbg
@@ -271,7 +271,7 @@ def test_compare_two_csv_databases(app: ExploreApp, tmp_path: Path) -> None:
     rows = {row[0]: row[1:] for row in tab.table.rows()}
     assert rows["Distinct keywords"] == ("2", "0")
     assert rows["Separator"] == ("comma", "semicolon")
-    assert sorted(tab.pickers[0]["values"]) == ["a.csv", "b.csv"]  # not summary.csv
+    assert sorted(tab.pickers[0]["values"]) == ["a.csv", "b.csv"]
 
 
 def test_table_sorts_numbers_numerically(app: ExploreApp) -> None:
@@ -282,6 +282,17 @@ def test_table_sorts_numbers_numerically(app: ExploreApp) -> None:
     assert [row[1] for row in table.rows()] == ["9", "10", "100"]
     table._sort("Links")
     assert [row[1] for row in table.rows()] == ["100", "10", "9"]
+
+
+def test_table_sorts_ranking_cells_by_place_and_labels_naturally(app: ExploreApp) -> None:
+    table = Table(app.root)
+    rows = [("P10", "12.  0.357"), ("P2", "1.  0.704"), ("P1", "2.  0.562"), ("P22", "10.  0.36")]
+    table.set_rows(["Page", "ExploreIT rank"], rows)
+
+    table._sort("ExploreIT rank")
+    assert [row[1].split(".")[0] for row in table.rows()] == ["1", "2", "10", "12"]
+    table._sort("Page")
+    assert [row[0] for row in table.rows()] == ["P1", "P2", "P10", "P22"]
 
 
 @pytest.mark.usefixtures("site")
@@ -361,7 +372,7 @@ def test_ranking_tab_ranks_and_shows_prestige_on_the_graph(app: ExploreApp, tmp_
     settle(app)
 
     assert len(tab.table.rows()) == 6
-    assert tab.table.rows()[0][0] == "P1"  # page 0 gets the most links
+    assert tab.table.rows()[0][0] == "P1"
     assert len(tab.agreement.rows()) == len(METHODS) * (len(METHODS) - 1) // 2
     tab.on_graph.set("weighted prestige")
     tab.show_on_graph()
@@ -374,7 +385,7 @@ def test_ranking_tab_ranks_and_shows_prestige_on_the_graph(app: ExploreApp, tmp_
     app.graph_tab.restyle()
     assert canvas.itemcget(canvas._label_items[best.url], "text").startswith("P1  ")
     eigen = next(row for row in tab.methods_table.rows() if row[0] == "eigenvector")
-    assert float(eigen[4]) > 0  # the largest eigenvalue is shown
+    assert float(eigen[4]) > 0
 
     window = tab.show_matrix_window()
     window.weighted.set(True)

@@ -58,7 +58,7 @@ class Node:
     visited: bool
     links_in: int
     links_out: int
-    prestige: float = 0.0  # score from the Ranking tab, 0 until a ranking is shown
+    prestige: float = 0.0
 
     @property
     def host(self) -> str:
@@ -110,7 +110,7 @@ def positions(data: GraphData, layout: Layout) -> dict[str, tuple[float, float]]
     rows = _rows(data)
     if layout is Layout.LEVELS:
         return _columns_by_level(data, rows)
-    import networkx as nx  # slow to load, so only when a layout is computed
+    import networkx as nx
 
     graph: nx.Graph[str] = nx.Graph()
     graph.add_nodes_from(data.nodes)
@@ -242,7 +242,6 @@ def _normalise(raw: dict[str, tuple[float, float]]) -> dict[str, tuple[float, fl
     ys = [y for _, y in raw.values()]
     width = (max(xs) - min(xs)) or 1.0
     height = (max(ys) - min(ys)) or 1.0
-    # A single column or row sits in the middle instead of on the edge.
     return {
         url: (
             (x - min(xs)) / width if max(xs) > min(xs) else 0.5,

@@ -147,7 +147,7 @@ def test_store_and_diff_commands(respx_mock: respx.MockRouter, tmp_path: Path) -
     assert (tmp_path / "a.sqlite").exists()
     assert compared.exit_code == 0, compared.output
     assert "Pages only here" in compared.output
-    assert "semicolon" in compared.output  # the structure of the two files differs
+    assert "semicolon" in compared.output
 
 
 def test_store_command_needs_content(tmp_path: Path) -> None:

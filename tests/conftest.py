@@ -13,5 +13,4 @@ def fixtures_dir() -> Path:
     return FIXTURES_DIR
 
 
-# Python builds without Tk cannot even import the desktop application tests.
 collect_ignore = [] if importlib.util.find_spec("tkinter") else ["test_gui.py"]

@@ -12,8 +12,6 @@ from exploreit.ranking.matrix import (
     write_matrix_csv,
 )
 
-#   a -> b, a -> c, b -> c, c -> a, d -> a        (d has no incoming links)
-#   e has no outgoing links
 GRAPH = LinkGraph(
     pages=("a", "b", "c", "d", "e"),
     links=(("a", "b"), ("a", "c"), ("b", "c"), ("c", "a"), ("d", "a"), ("b", "e")),
@@ -29,18 +27,18 @@ def test_adjacency_matrix_rows_are_sources_columns_are_targets() -> None:
     matrix = adjacency_matrix(GRAPH)
 
     assert matrix.shape == (5, 5)
-    assert matrix[0, 1] == 1  # a -> b
-    assert matrix[1, 0] == 0  # no b -> a
+    assert matrix[0, 1] == 1
+    assert matrix[1, 0] == 0
     assert matrix.sum() == len(GRAPH.links)
-    assert matrix.sum(axis=0).tolist() == [2, 1, 2, 0, 1]  # incoming links per page
+    assert matrix.sum(axis=0).tolist() == [2, 1, 2, 0, 1]
 
 
 def test_weighted_matrix_shares_each_page_vote() -> None:
     matrix = adjacency_matrix(GRAPH, weighted=True)
 
-    assert matrix[0, 1] == matrix[0, 2] == 0.5  # a has two links
-    assert matrix[2, 0] == 1.0  # c has one link
-    assert np.allclose(matrix.sum(axis=1), [1, 1, 1, 1, 0])  # e votes for nobody
+    assert matrix[0, 1] == matrix[0, 2] == 0.5
+    assert matrix[2, 0] == 1.0
+    assert np.allclose(matrix.sum(axis=1), [1, 1, 1, 1, 0])
 
 
 def test_dangling_pages() -> None:

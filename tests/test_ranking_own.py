@@ -26,7 +26,7 @@ def test_word_cascade_rounds_shrink_by_one() -> None:
     cascade = word_cascade(list(texts), texts, start=4, template_share=1.0)
 
     assert [len(round_) for round_ in cascade.rounds] == [4, 3, 2, 1]
-    assert cascade.rounds[0] == ["worda", "wordb", "wordc", "wordd"]  # on most pages
+    assert cascade.rounds[0] == ["worda", "wordb", "wordc", "wordd"]
 
 
 def test_first_round_decides_and_later_rounds_break_ties() -> None:
@@ -64,7 +64,6 @@ def test_betweenness_matches_networkx() -> None:
 
 
 def test_bridge_page_scores_highest() -> None:
-    # Two triangles joined only through "bridge".
     g = graph(
         "a>b", "b>c", "c>a", "c>bridge", "bridge>d", "d>e", "e>f", "f>d", "f>bridge", "bridge>c"
     )
@@ -92,7 +91,6 @@ def test_mutual_link_counts_less() -> None:
 
 
 def test_menu_link_counts_less() -> None:
-    # Every page links to "menu"; "a" also links to "x", which only it links to.
     g = graph("a>menu", "b>menu", "c>menu", "x>menu", "a>x", "menu>b", "b>c", "c>a")
 
     assert share_of(g, "a", "menu") < share_of(g, "a", "x")
@@ -125,4 +123,4 @@ def test_template_words_on_every_page_are_skipped() -> None:
 
     cascade = word_cascade(list(texts), texts, start=3)
 
-    assert cascade.rounds[0] == ["apple", "berry", "cherry"]  # footer words are gone
+    assert cascade.rounds[0] == ["apple", "berry", "cherry"]

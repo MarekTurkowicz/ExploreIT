@@ -21,11 +21,11 @@ from exploreit.gui.graph_model import (
 )
 
 MARGIN = 50
-LABEL_FONT = "ExploreITGraphLabel"  # a named font, sized by the app for page names
+LABEL_FONT = "ExploreITGraphLabel"
 ZOOM_STEP = 1.15
-DIM_MIX = 0.8  # how far faded items move towards the background colour
-MANY_EDGES = 1500  # above this, links not being moved are hidden while dragging or zooming
-EDGES_BACK_MS = 200  # links come back this long after the last zoom step
+DIM_MIX = 0.8
+MANY_EDGES = 1500
+EDGES_BACK_MS = 200
 
 
 @dataclass
@@ -37,7 +37,7 @@ class Style:
     node_scale: float = 1.0
     labels: bool = True
     edges: bool = True
-    short_names: Mapping[str, str] = field(default_factory=dict)  # page -> "P1", ...
+    short_names: Mapping[str, str] = field(default_factory=dict)
     background: str = "#ffffff"
     foreground: str = "#222222"
     edge_colour: str = "#9a9890"
@@ -61,7 +61,7 @@ class GraphCanvas(tk.Canvas):
         self.style = Style()
         self.data = GraphData({}, [])
         self.start_url = ""
-        self.world: dict[str, tuple[float, float]] = {}  # positions in the unit square
+        self.world: dict[str, tuple[float, float]] = {}
         self.zoom = 1.0
         self.pan = (0.0, 0.0)
         self._node_items: dict[str, int] = {}
@@ -76,8 +76,8 @@ class GraphCanvas(tk.Canvas):
         self._last_mouse = (0, 0)
 
         self._redraw_pending = self._edges_pending = ""
-        self._view = (1.0, 1.0)  # drawing area in pixels, measured by redraw()
-        self._faded: dict[str, str] = {}  # node colours when another page is hovered
+        self._view = (1.0, 1.0)
+        self._faded: dict[str, str] = {}
         self.bind("<Configure>", lambda _: self.redraw_soon())
         self.bind("<ButtonPress-1>", self._on_press)
         self.bind("<B1-Motion>", self._on_drag)
@@ -85,11 +85,9 @@ class GraphCanvas(tk.Canvas):
         self.bind("<Double-Button-1>", self._on_double_click)
         self.bind("<Motion>", self._on_move)
         self.bind("<Leave>", lambda _: self._set_hovered(""))
-        self.bind("<MouseWheel>", self._on_wheel)  # Windows and macOS
-        self.bind("<Button-4>", lambda e: self.zoom_at(ZOOM_STEP, e.x, e.y))  # Linux
+        self.bind("<MouseWheel>", self._on_wheel)
+        self.bind("<Button-4>", lambda e: self.zoom_at(ZOOM_STEP, e.x, e.y))
         self.bind("<Button-5>", lambda e: self.zoom_at(1 / ZOOM_STEP, e.x, e.y))
-
-    # Drawing
 
     def load(self, data: GraphData, world: dict[str, tuple[float, float]], start_url: str) -> None:
         """Draw a new graph and reset the view."""
@@ -137,7 +135,6 @@ class GraphCanvas(tk.Canvas):
                     self.data.nodes[url], self.start_url, style.size_by, style.short_names
                 ),
             )
-        # One call per tag instead of one per item: a graph can have thousands of links.
         self.itemconfigure(
             "label", fill=style.foreground, state="normal" if style.labels else "hidden"
         )
@@ -186,7 +183,6 @@ class GraphCanvas(tk.Canvas):
         if not (self.style.edges and len(self._edge_items) > MANY_EDGES):
             self.redraw_soon()
             return
-        # A big graph: move only the pages while the wheel turns, the links once it stops.
         self.itemconfigure("edge", state="hidden")
         self.redraw(edges=False)
         if self._edges_pending:
@@ -238,21 +234,16 @@ class GraphCanvas(tk.Canvas):
             positions = {url: self.screen(url) for url in edge}
         (x1, y1), (x2, y2) = positions[edge[0]], positions[edge[1]]
         length = hypot(x2 - x1, y2 - y1) or 1.0
-        # Stop the arrow at the edge of the target circle so its head stays visible.
         r = self._radius(self.data.nodes[edge[1]]) + 1
         self.coords(
             self._edge_items[edge], x1, y1, x2 - (x2 - x1) * r / length, y2 - (y2 - y1) * r / length
         )
-
-    # Interaction
 
     def _on_press(self, event: tk.Event[tk.Misc]) -> None:
         self._drag_url = self.node_at(event.x, event.y)
         self._last_mouse = (event.x, event.y)
         self.configure(cursor="fleur")
         if self.style.edges and len(self._edge_items) > MANY_EDGES:
-            # Repainting thousands of lines on every mouse move makes dragging stutter,
-            # so only the dragged page's own links stay visible until the button is let go.
             self.itemconfigure("edge", state="hidden")
             for edge in self._edges_of[self._drag_url] if self._drag_url else []:
                 self.itemconfigure(self._edge_items[edge], state="normal")
@@ -336,7 +327,6 @@ class GraphCanvas(tk.Canvas):
             font="TkDefaultFont",
         )
         x1, y1, x2, y2 = self.bbox(text)
-        # Keep the card inside the canvas.
         shift_x = min(0, self.winfo_width() - x2 - 8)
         shift_y = min(0, self.winfo_height() - y2 - 8)
         self.move(text, shift_x, shift_y)

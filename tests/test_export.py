@@ -75,7 +75,7 @@ def test_html_page_escapes_script_end_tags(tmp_path: Path) -> None:
 
     write_html(result, path)
 
-    assert path.read_text(encoding="utf-8").count("</script>") == 2  # only the real tags
+    assert path.read_text(encoding="utf-8").count("</script>") == 2
 
 
 def test_links_to_the_page_itself_are_not_drawn() -> None:

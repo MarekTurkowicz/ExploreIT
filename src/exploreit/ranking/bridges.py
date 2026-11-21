@@ -20,7 +20,6 @@ def betweenness(graph: LinkGraph) -> np.ndarray:
     out_links = [[index[target] for target in graph.out_links[page]] for page in graph.pages]
     score = [0.0] * size
     for source in range(size):
-        # Breadth-first search: distance and number of shortest paths from `source`.
         order: list[int] = []
         parents: list[list[int]] = [[] for _ in range(size)]
         paths = [0] * size
@@ -38,7 +37,6 @@ def betweenness(graph: LinkGraph) -> np.ndarray:
                 if distance[target] == step:
                     paths[target] += paths[page]
                     parents[target].append(page)
-        # Walk back from the farthest pages, handing each page its share of the paths.
         credit = [0.0] * size
         for page in reversed(order):
             share = (1 + credit[page]) / paths[page]
@@ -46,6 +44,6 @@ def betweenness(graph: LinkGraph) -> np.ndarray:
                 credit[parent] += paths[parent] * share
             if page != source:
                 score[page] += credit[page]
-    pairs = (size - 1) * (size - 2)  # ordered pairs of other pages in a directed graph
+    pairs = (size - 1) * (size - 2)
     values = np.array(score)
     return values / pairs if pairs else values

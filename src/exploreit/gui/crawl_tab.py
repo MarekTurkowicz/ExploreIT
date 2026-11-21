@@ -52,7 +52,7 @@ class CrawlTab(ttk.Frame):
         self._stop_requested = threading.Event()
         self._started = 0.0
         self._pages = 0
-        self.inputs: list[ttk.Widget] = []  # everything locked while a crawl runs
+        self.inputs: list[ttk.Widget] = []
         self._build()
 
     def _build(self) -> None:
@@ -262,7 +262,6 @@ class CrawlTab(ttk.Frame):
         self._started, self._pages = time.monotonic(), 0
         self._tick()
         self.app.set_status(f"Crawling {config.start_url} …")
-        # Read the folder from the window now: the worker thread must not touch Tk.
         path = self.app.data_dir / f"crawl-{timestamp()}.json"
         self.app.tasks.run(
             lambda: self._crawl(config, fields, separator, path), self._finish, self._failed

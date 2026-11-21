@@ -3,6 +3,7 @@ as PNG or shown inside the application window."""
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from itertools import pairwise
 from pathlib import Path
@@ -13,12 +14,11 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullLocator
 
 from exploreit.crawler import CrawlResult
 from exploreit.graph import compute_stats
 
-# Categorical slots: blue, orange, aqua, violet, yellow.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#6250d6", "#eda100"]
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
@@ -114,6 +114,9 @@ def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
         )
         drawn += 1
     ax.set_yscale("log")
+    ax.yaxis.set_major_locator(LogLocator(numticks=6))
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.yaxis.set_major_formatter(FuncFormatter(_power_of_ten))
     _style(ax, grid_axis="y")
     ax.set_xlabel("Iteration")
     ax.set_ylabel("Largest change")
@@ -124,7 +127,7 @@ def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
     return figure
 
 
-MATRIX_VALUES_UP_TO = 25  # pages; beyond this the numbers in the cells are unreadable
+MATRIX_VALUES_UP_TO = 25
 
 
 def matrix_figure(matrix: np.ndarray, labels: list[str], title: str) -> Figure:
@@ -133,7 +136,6 @@ def matrix_figure(matrix: np.ndarray, labels: list[str], title: str) -> Figure:
     side = min(max(4.0, 0.24 * size + 1.8), 12.0)
     figure, ax = _figure(width=side, height=side)
     links = matrix[matrix > 0]
-    # A few strong cells (pages with one or two links) would wash out all the others.
     top = float(np.quantile(links, 0.9)) if links.size else 1.0
     ax.imshow(matrix, cmap="Blues", vmin=0, vmax=top, interpolation="nearest", aspect="equal")
     font = 9 if size <= 15 else 7 if size <= 30 else 5
@@ -208,6 +210,11 @@ def network_figure(
 def save_figure(figure: Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=150)
+
+
+def _power_of_ten(value: float, _: float) -> str:
+    """A log axis label such as 1e-6: plain text, far quicker to lay out than 10^-6."""
+    return f"1e{round(math.log10(value))}" if value > 0 else ""
 
 
 def _figure(width: float, height: float) -> tuple[Figure, Axes]:

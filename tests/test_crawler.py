@@ -12,9 +12,6 @@ from exploreit.models import CrawledPage, Edge, LinkKind
 
 SITE = "https://example.com"
 
-#   /  ->  /a  ->  /a/1
-#      ->  /b  ->  /b/1
-#      ->  https://other.org/
 PAGES = {
     "/": '<a href="/a">A</a> <a href="/b">B</a> <a href="https://other.org/">Out</a>',
     "/a": '<a href="/a/1">1</a> <a href="/">Home</a> <img src="/logo.png">',

@@ -16,7 +16,6 @@ from exploreit.graph import shortest_levels
 if TYPE_CHECKING:
     import networkx as nx
 
-# Pinned so the page keeps working the same way; loaded from a CDN when the page opens.
 VIS_NETWORK = "https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"
 ERROR_COLOUR = "#d03b3b"
 UNVISITED_COLOUR = "#c3c2b7"
@@ -66,7 +65,7 @@ def build_graph(result: CrawlResult, visited_only: bool = True) -> nx.DiGraph[st
     Nodes carry `level`, `status_code`, `content_type` and `visited`; edges carry `kind`.
     With visited_only, links to pages that were never fetched are left out.
     """
-    import networkx as nx  # imported here: it is slow to load and only needed now
+    import networkx as nx
 
     levels = shortest_levels(result)
     graph: nx.DiGraph[str] = nx.DiGraph()
@@ -80,7 +79,7 @@ def build_graph(result: CrawlResult, visited_only: bool = True) -> nx.DiGraph[st
         )
     for edge in result.edges:
         if edge.source == edge.target:
-            continue  # older crawls kept links from a page to itself
+            continue
         if edge.target not in graph:
             if visited_only:
                 continue
@@ -115,7 +114,6 @@ def write_html(result: CrawlResult, path: Path, visited_only: bool = True) -> No
         {"from": source, "to": target, "color": EDGE_COLOURS[data["kind"]]}
         for source, target, data in graph.edges(data=True)
     ]
-    # "</" inside a <script> block would end it early, so escape it in the JSON.
     payload = json.dumps({"nodes": nodes, "edges": edges}).replace("</", "<\\/")
     page = HTML_PAGE.substitute(
         title=html.escape(result.config.start_url),
