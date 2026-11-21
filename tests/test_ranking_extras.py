@@ -187,3 +187,23 @@ def test_kendall_taus_is_symmetric_and_nan_without_order() -> None:
 
     assert taus[0, 1] == taus[1, 0] == pytest.approx(-1)
     assert np.isnan(taus[0, 2])
+
+
+def test_query_joins_the_mix_instead_of_replacing_the_cascade() -> None:
+    links = (("a", "b"), ("b", "c"), ("c", "a"), ("a", "c"), ("b", "a"))
+    graph = LinkGraph(("a", "b", "c"), links, TEXTS)
+    explore = METHODS[-1]
+
+    plain = compare(graph, Settings(cascade_words=2), [explore]).results[0].scores.values
+    filtered = (
+        compare(graph, Settings(cascade_words=2, query="python", weight_query=0), [explore])
+        .results[0]
+        .scores.values
+    )
+    mixed = compare(graph, Settings(cascade_words=2, query="python"), [explore]).results[0]
+
+    # Without weight the query only filters: matching pages keep the plain mix.
+    assert filtered[:2] == pytest.approx(plain[:2])
+    assert filtered[2] == 0
+    # With weight it also moves the page that matches best further up.
+    assert mixed.scores.values[0] - mixed.scores.values[1] > plain[0] - plain[1]

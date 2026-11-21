@@ -252,6 +252,9 @@ def rank(
     weight_links: Annotated[float, typer.Option(min=0, help="ExploreIT rank: links.")] = 0.5,
     weight_text: Annotated[float, typer.Option(min=0, help="ExploreIT rank: text.")] = 0.3,
     weight_bridges: Annotated[float, typer.Option(min=0, help="ExploreIT rank: bridges.")] = 0.2,
+    weight_query: Annotated[
+        float, typer.Option(min=0, help="ExploreIT rank: query match (with --query).")
+    ] = 0.5,
     query: Annotated[
         str, typer.Option(help="Search words: ExploreIT rank then ranks only matching pages.")
     ] = "",
@@ -298,6 +301,7 @@ def rank(
         weight_links=weight_links,
         weight_text=weight_text,
         weight_bridges=weight_bridges,
+        weight_query=weight_query,
         query=query,
     )
     if not graph.texts:

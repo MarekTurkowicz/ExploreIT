@@ -21,7 +21,7 @@ if TYPE_CHECKING:
         Settings,
     )
 
-WEIGHTS = {"links": "0.5", "text": "0.3", "bridges": "0.2"}
+WEIGHTS = {"links": "0.5", "text": "0.3", "bridges": "0.2", "query": "0.5"}
 
 
 class RankingTab(ttk.Frame):
@@ -104,15 +104,16 @@ class RankingTab(ttk.Frame):
             ttk.Spinbox(own, textvariable=variable, from_=0, to=1, increment=0.1, width=5).grid(
                 row=row, column=1, sticky="w", padx=8
             )
-        ttk.Label(own, text="Search query").grid(row=4, column=0, sticky="w", pady=4)
+        ttk.Label(own, text="Search query").grid(row=5, column=0, sticky="w", pady=4)
         query = ttk.Entry(own, textvariable=self.query, width=16)
-        query.grid(row=4, column=1, sticky="w", padx=8)
+        query.grid(row=5, column=1, sticky="w", padx=8)
         query.bind("<Return>", lambda _: self.compute())
         ttk.Label(
             own,
-            text="With a query, text = query match and\nonly pages that match keep a score.",
+            text="Links count less from menus and footers.\n"
+            "With a query, only pages that match it\nkeep a score.",
             foreground="#898781",
-        ).grid(row=5, column=0, columnspan=2, sticky="w")
+        ).grid(row=6, column=0, columnspan=2, sticky="w")
 
         actions = ttk.Frame(self)
         actions.pack(fill="x", pady=10)
@@ -200,6 +201,7 @@ class RankingTab(ttk.Frame):
             weight_links=weights["links"],
             weight_text=weights["text"],
             weight_bridges=weights["bridges"],
+            weight_query=weights["query"],
             query=self.query.get().strip(),
         )
 

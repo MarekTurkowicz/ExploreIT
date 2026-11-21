@@ -37,6 +37,7 @@ class Settings:
     weight_links: float = 0.5  # parts of ExploreIT rank
     weight_text: float = 0.3
     weight_bridges: float = 0.2
+    weight_query: float = 0.5  # used only with a query
     query: str = ""  # search words; when set, ExploreIT rank answers this query
 
 
@@ -156,26 +157,29 @@ def _query_match(graph: LinkGraph, settings: Settings) -> Scores:
 
 
 def _explore_rank(graph: LinkGraph, settings: Settings) -> Scores:
-    """Trusted links, text and bridges, each scaled to 0..1, then mixed.
+    """Trusted links, the word cascade, bridges and the query match, mixed by weight.
 
-    The text part is the word cascade, or with a query the query match; then, like a
-    search engine, only pages that match the query keep a score.
+    Each part is scaled to 0..1 first. The links part already counts menu and footer
+    links less (see `trusted_matrix`), and on a graph with merged duplicates no page is
+    counted twice. With a query, its match joins the mix and, like a search engine,
+    only the pages that match keep a score.
     """
     links = _trusted_prestige(graph, settings)
+    query = _query_match(graph, settings).values
     searching = bool(query_words(settings.query))
-    text = _query_match(graph, settings) if searching else _word_cascade(graph, settings)
     parts = [
         (settings.weight_links, links.values),
-        (settings.weight_text, text.values),
+        (settings.weight_text, _word_cascade(graph, settings).values),
         (settings.weight_bridges, betweenness(graph)),
+        (settings.weight_query, query),
     ]
-    # Without stored content the text part is all zeros; its weight then goes unused.
+    # A part that is all zeros (no stored content, no query) leaves its weight unused.
     used = [(weight, values) for weight, values in parts if weight > 0 and values.max() > 0]
     total = sum(weight for weight, _ in used) or 1.0
     combined = sum(weight / total * values / values.max() for weight, values in used)
     values = np.asarray(combined, dtype=float) if used else np.zeros(len(graph.pages))
     if searching:
-        values = np.where(text.values > 0, values, 0.0)
+        values = np.where(query > 0, values, 0.0)
     return Scores(values, links.iterations, links.converged, links.history)
 
 
@@ -205,7 +209,7 @@ METHODS = [
     Method("bridges", "Share of shortest paths between other pages passing through.", _bridges),
     Method(
         "ExploreIT rank",
-        "Trusted prestige + word cascade (or query match) + bridges, mixed by the weights.",
+        "Trusted links + word cascade + bridges (+ query match), mixed by the weights.",
         _explore_rank,
     ),
 ]
