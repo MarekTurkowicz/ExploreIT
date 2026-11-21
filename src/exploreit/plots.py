@@ -3,6 +3,7 @@ as PNG or shown inside the application window."""
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from itertools import pairwise
 from pathlib import Path
@@ -13,7 +14,7 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import FuncFormatter, LogLocator, MaxNLocator, NullLocator
 
 from exploreit.crawler import CrawlResult
 from exploreit.graph import compute_stats
@@ -113,6 +114,9 @@ def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
         )
         drawn += 1
     ax.set_yscale("log")
+    ax.yaxis.set_major_locator(LogLocator(numticks=6))
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.yaxis.set_major_formatter(FuncFormatter(_power_of_ten))
     _style(ax, grid_axis="y")
     ax.set_xlabel("Iteration")
     ax.set_ylabel("Largest change")
@@ -206,6 +210,11 @@ def network_figure(
 def save_figure(figure: Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=150)
+
+
+def _power_of_ten(value: float, _: float) -> str:
+    """A log axis label such as 1e-6: plain text, far quicker to lay out than 10^-6."""
+    return f"1e{round(math.log10(value))}" if value > 0 else ""
 
 
 def _figure(width: float, height: float) -> tuple[Figure, Axes]:

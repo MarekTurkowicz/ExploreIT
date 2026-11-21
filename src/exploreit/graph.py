@@ -76,7 +76,7 @@ def compute_stats(result: CrawlResult, top: int = 5) -> GraphStats:
     levels = shortest_levels(result)
     subpage_links = [out_degree[page.url] for page in html if page.url != start]
     host = urlsplit(start).netloc
-    external = sum(urlsplit(edge.target).netloc != host for edge in result.edges)
+    external = sum(count for target, count in in_degree.items() if urlsplit(target).netloc != host)
 
     return GraphStats(
         pages=len(result.pages),
