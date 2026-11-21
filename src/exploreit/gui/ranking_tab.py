@@ -20,6 +20,7 @@ from exploreit.ranking.matrix import (
 )
 from exploreit.ranking.methods import (
     METHODS,
+    QUERY_METHOD,
     Comparison,
     Settings,
     compare,
@@ -53,6 +54,8 @@ class RankingTab(ttk.Frame):
         self.max_iterations = tk.StringVar(value="200")
         self.on_graph = tk.StringVar(value=METHODS[-1].name)
         self.cascade_words = tk.StringVar(value="10")
+        self.merge = tk.BooleanVar(value=True)
+        self.query = tk.StringVar(value="")
         self.weights = {part: tk.StringVar(value=value) for part, value in WEIGHTS.items()}
         self._build()
 
@@ -63,6 +66,12 @@ class RankingTab(ttk.Frame):
         checks.pack(side="left", fill="y")
         self.checks = ttk.Label(checks, text="Load a crawl first.", justify="left")
         self.checks.pack(anchor="w")
+        ttk.Checkbutton(
+            checks,
+            text="Merge duplicate pages (http/https, www, same text)",
+            variable=self.merge,
+            command=self.rebuild,
+        ).pack(anchor="w", pady=(8, 0))
 
         settings = ttk.LabelFrame(top, text="Iteration", padding=10)
         settings.pack(side="left", fill="both", expand=True, padx=(12, 0))
@@ -106,6 +115,15 @@ class RankingTab(ttk.Frame):
             ttk.Spinbox(own, textvariable=variable, from_=0, to=1, increment=0.1, width=5).grid(
                 row=row, column=1, sticky="w", padx=8
             )
+        ttk.Label(own, text="Search query").grid(row=4, column=0, sticky="w", pady=4)
+        query = ttk.Entry(own, textvariable=self.query, width=16)
+        query.grid(row=4, column=1, sticky="w", padx=8)
+        query.bind("<Return>", lambda _: self.compute())
+        ttk.Label(
+            own,
+            text="With a query, text = query match and\nonly pages that match keep a score.",
+            foreground="#898781",
+        ).grid(row=5, column=0, columnspan=2, sticky="w")
 
         actions = ttk.Frame(self)
         actions.pack(fill="x", pady=10)
@@ -118,7 +136,7 @@ class RankingTab(ttk.Frame):
         ttk.Combobox(
             actions,
             textvariable=self.on_graph,
-            values=[method.name for method in METHODS],
+            values=[method.name for method in [*METHODS, QUERY_METHOD]],
             state="readonly",
             width=18,
         ).pack(side="left")
@@ -146,7 +164,13 @@ class RankingTab(ttk.Frame):
 
     def show(self, result: CrawlResult, path: Path) -> None:
         self.result, self.crawl_file = result, path
-        self.graph = link_graph(result)
+        self.rebuild()
+
+    def rebuild(self) -> None:
+        """Build the graph again from the crawl, e.g. after the duplicates switch changed."""
+        if not hasattr(self, "result"):
+            return
+        self.graph = link_graph(self.result, merge_duplicates=self.merge.get())
         lines = [
             f"{'✔' if check.met else '✘'}  {check.description}: {check.actual}"
             for check in check_requirements(self.graph)
@@ -156,6 +180,8 @@ class RankingTab(ttk.Frame):
         if cycle:
             lines.append("    cycle: " + " → ".join(labels[page] for page in [*cycle, cycle[0]]))
         lines.append(f"{len(self.graph.pages)} pages, {len(self.graph.links)} links between them")
+        if self.graph.merged:
+            lines.append(f"{len(self.graph.merged)} duplicate addresses merged")
         self.checks.configure(text="\n".join(lines))
         self.compute_button.state(["!disabled"] if self.graph.pages else ["disabled"])
 
@@ -180,6 +206,7 @@ class RankingTab(ttk.Frame):
             weight_links=weights["links"],
             weight_text=weights["text"],
             weight_bridges=weights["bridges"],
+            query=self.query.get().strip(),
         )
 
     def compute(self) -> None:
@@ -239,13 +266,23 @@ class RankingTab(ttk.Frame):
         note = (
             "" if self.graph.texts else " This crawl has no saved content: word cascade is empty."
         )
+        query = [r for r in comparison.results if r.method is QUERY_METHOD]
+        if query:
+            matching = int((query[0].scores.values > 0).sum())
+            note += f" {matching} pages match the query."
         self.app.set_status(
             "Ranked with every method. 'Show' sizes the pages on the Graph tab by score." + note
         )
 
     def show_on_graph(self) -> None:
-        result = next(r for r in self.comparison.results if r.method.name == self.on_graph.get())
+        chosen = [r for r in self.comparison.results if r.method.name == self.on_graph.get()]
+        if not chosen:
+            messagebox.showinfo("Ranking", f"'{self.on_graph.get()}' needs a search query.")
+            return
+        result = chosen[0]
         scores = dict(zip(self.graph.pages, result.scores.values.tolist(), strict=True))
+        # A merged duplicate is drawn with the score of the page it is a copy of.
+        scores |= {copy: scores[kept] for copy, kept in self.graph.merged.items()}
         self.app.graph_tab.show_prestige(scores)
         self.app.notebook.select(self.app.graph_tab)
 

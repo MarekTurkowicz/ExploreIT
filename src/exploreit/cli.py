@@ -254,6 +254,12 @@ def rank(
     weight_links: Annotated[float, typer.Option(min=0, help="ExploreIT rank: links.")] = 0.5,
     weight_text: Annotated[float, typer.Option(min=0, help="ExploreIT rank: text.")] = 0.3,
     weight_bridges: Annotated[float, typer.Option(min=0, help="ExploreIT rank: bridges.")] = 0.2,
+    query: Annotated[
+        str, typer.Option(help="Search words: ExploreIT rank then ranks only matching pages.")
+    ] = "",
+    keep_duplicates: Annotated[
+        bool, typer.Option(help="Keep http/https, www and same-text copies as separate pages.")
+    ] = False,
 ) -> None:
     """Rank the pages of a crawl by their links with every method and compare them.
 
@@ -269,7 +275,7 @@ def rank(
     )
     from exploreit.ranking.methods import Settings, compare, format_tau, write_ranking_csv
 
-    graph = link_graph(CrawlResult.load(crawl_file))
+    graph = link_graph(CrawlResult.load(crawl_file), merge_duplicates=not keep_duplicates)
     labels = dict(zip(graph.pages, short_labels(graph), strict=True))
     checks = Table(title="Graph requirements", show_header=False)
     for check in check_requirements(graph):
@@ -278,6 +284,8 @@ def rank(
         )
     if cycle := shortest_cycle(graph):
         checks.add_row("", "cycle", " → ".join(labels[page] for page in [*cycle, cycle[0]]))
+    if graph.merged:
+        checks.add_row("", "duplicate addresses merged", str(len(graph.merged)))
     console.print(checks)
     if not graph.pages:
         raise typer.Exit(code=1)
@@ -292,6 +300,7 @@ def rank(
         weight_links=weight_links,
         weight_text=weight_text,
         weight_bridges=weight_bridges,
+        query=query,
     )
     if not graph.texts:
         console.print("[yellow]No page content in this crawl:[/] the word cascade is empty.")

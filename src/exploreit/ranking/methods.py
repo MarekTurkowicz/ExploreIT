@@ -18,6 +18,7 @@ from exploreit.ranking.eigen import leading_eigenvector
 from exploreit.ranking.graph import LinkGraph
 from exploreit.ranking.matrix import adjacency_matrix, short_labels, trusted_matrix
 from exploreit.ranking.prestige import Dangling, Normalization, prestige
+from exploreit.ranking.query import query_match, query_words
 from exploreit.ranking.words import word_cascade
 
 
@@ -35,6 +36,7 @@ class Settings:
     weight_links: float = 0.5  # parts of ExploreIT rank
     weight_text: float = 0.3
     weight_bridges: float = 0.2
+    query: str = ""  # search words; when set, ExploreIT rank answers this query
 
 
 DEFAULT_SETTINGS = Settings()
@@ -90,9 +92,10 @@ class Comparison:
 
     def agreement(self) -> list[tuple[str, str, float]]:
         """Kendall's tau for every pair of methods: 1 = same order, -1 = reversed."""
+        taus = kendall_taus([result.scores.values for result in self.results])
         return [
-            (a.method.name, b.method.name, kendall_tau(a.scores.values, b.scores.values))
-            for a, b in combinations(self.results, 2)
+            (self.results[i].method.name, self.results[j].method.name, taus[i, j])
+            for i, j in combinations(range(len(self.results)), 2)
         ]
 
 
@@ -147,12 +150,22 @@ def _bridges(graph: LinkGraph, _: Settings) -> Scores:
     return Scores(betweenness(graph))
 
 
+def _query_match(graph: LinkGraph, settings: Settings) -> Scores:
+    return Scores(query_match(graph.pages, graph.texts, settings.query))
+
+
 def _explore_rank(graph: LinkGraph, settings: Settings) -> Scores:
-    """Trusted links, the word cascade and bridges, each scaled to 0..1, then mixed."""
+    """Trusted links, text and bridges, each scaled to 0..1, then mixed.
+
+    The text part is the word cascade, or with a query the query match; then, like a
+    search engine, only pages that match the query keep a score.
+    """
     links = _trusted_prestige(graph, settings)
+    searching = bool(query_words(settings.query))
+    text = _query_match(graph, settings) if searching else _word_cascade(graph, settings)
     parts = [
         (settings.weight_links, links.values),
-        (settings.weight_text, _word_cascade(graph, settings).values),
+        (settings.weight_text, text.values),
         (settings.weight_bridges, betweenness(graph)),
     ]
     # Without stored content the text part is all zeros; its weight then goes unused.
@@ -160,6 +173,8 @@ def _explore_rank(graph: LinkGraph, settings: Settings) -> Scores:
     total = sum(weight for weight, _ in used) or 1.0
     combined = sum(weight / total * values / values.max() for weight, values in used)
     values = np.asarray(combined, dtype=float) if used else np.zeros(len(graph.pages))
+    if searching:
+        values = np.where(text.values > 0, values, 0.0)
     return Scores(values, links.iterations, links.converged, links.history)
 
 
@@ -189,10 +204,22 @@ METHODS = [
     Method("bridges", "Share of shortest paths between other pages passing through.", _bridges),
     Method(
         "ExploreIT rank",
-        "Trusted prestige + word cascade + bridges, mixed by the chosen weights.",
+        "Trusted prestige + word cascade (or query match) + bridges, mixed by the weights.",
         _explore_rank,
     ),
 ]
+QUERY_METHOD = Method(
+    "query match",
+    "TF-IDF of the query words in the page text: frequent here, rare elsewhere.",
+    _query_match,
+)
+
+
+def methods_for(settings: Settings) -> list[Method]:
+    """Every method; the query match joins, before ExploreIT rank, when there is a query."""
+    if not query_words(settings.query):
+        return list(METHODS)
+    return [*METHODS[:-1], QUERY_METHOD, METHODS[-1]]
 
 
 def format_tau(tau: float) -> str:
@@ -227,18 +254,20 @@ def run_method(method: Method, graph: LinkGraph, settings: Settings) -> MethodRe
 def compare(
     graph: LinkGraph,
     settings: Settings = DEFAULT_SETTINGS,
-    methods: Sequence[Method] = METHODS,
+    methods: Sequence[Method] = (),
 ) -> Comparison:
-    return Comparison(graph, [run_method(method, graph, settings) for method in methods])
+    """Run `methods`, by default every method that fits the settings (`methods_for`)."""
+    chosen = methods or methods_for(settings)
+    return Comparison(graph, [run_method(method, graph, settings) for method in chosen])
 
 
 def places(scores: np.ndarray) -> list[int]:
     """Place of every page, 1 = highest score; equal scores share the better place."""
-    order = sorted(range(len(scores)), key=lambda index: -scores[index])
+    order = np.argsort(-scores, kind="stable")
     result = [0] * len(scores)
-    for position, index in enumerate(order, start=1):
-        previous = order[position - 2] if position > 1 else -1
-        tied = previous >= 0 and np.isclose(scores[previous], scores[index])
+    for position, index in enumerate(order.tolist(), start=1):
+        previous = int(order[position - 2]) if position > 1 else -1
+        tied = previous >= 0 and _close(scores[previous], scores[index])
         result[index] = result[previous] if tied else position
     return result
 
@@ -250,21 +279,45 @@ def kendall_tau(first: np.ndarray, second: np.ndarray) -> float:
     many pages the same score are not penalised for it. When one method gives every page
     the same score there is no order to compare and the result is NaN.
     """
-    concordant = discordant = ties_first = ties_second = 0
-    for i, j in combinations(range(len(first)), 2):
-        a = np.sign(first[i] - first[j]) if not np.isclose(first[i], first[j]) else 0
-        b = np.sign(second[i] - second[j]) if not np.isclose(second[i], second[j]) else 0
-        if a == 0 and b == 0:
-            continue
-        if a == 0:
-            ties_first += 1
-        elif b == 0:
-            ties_second += 1
-        elif a == b:
-            concordant += 1
-        else:
-            discordant += 1
-    denominator = np.sqrt(
-        (concordant + discordant + ties_first) * (concordant + discordant + ties_second)
-    )
-    return float((concordant - discordant) / denominator) if denominator else float("nan")
+    return float(kendall_taus([first, second])[0, 1])
+
+
+ROWS_AT_ONCE = 256  # pages compared with all others in one step; bounds the memory used
+
+
+def kendall_taus(rankings: Sequence[np.ndarray]) -> np.ndarray:
+    """Kendall's tau-b of every pair of rankings, as a symmetric matrix.
+
+    For a block of pages at a time, the order of each page against every later page is
+    worked out once per ranking and then reused for all pairs of rankings.
+    """
+    scores = [np.asarray(values, dtype=float) for values in rankings]
+    count, size = len(scores), len(scores[0]) if scores else 0
+    concordant, discordant, untied = (np.zeros((count, count)) for _ in range(3))
+    columns = np.arange(size)
+    for start in range(0, size, ROWS_AT_ONCE):
+        rows = np.arange(start, min(start + ROWS_AT_ONCE, size))
+        later = columns[None, :] > rows[:, None]  # each pair of pages once
+        orders = []
+        for values in scores:
+            here, there = values[rows][:, None], values[None, :]
+            order = np.where(np.isclose(here, there), 0, np.sign(here - there)).astype(np.int8)
+            orders.append(np.where(later, order, 0))
+        for i, j in combinations(range(count), 2):
+            product = orders[i] * orders[j]
+            concordant[i, j] += np.count_nonzero(product > 0)
+            discordant[i, j] += np.count_nonzero(product < 0)
+        for i in range(count):
+            untied[i, i] += np.count_nonzero(orders[i])
+    taus = np.eye(count)
+    for i, j in combinations(range(count), 2):
+        # tau-b = (C - D) / sqrt(pairs untied in the first * pairs untied in the second)
+        denominator = np.sqrt(untied[i, i] * untied[j, j])
+        taus[i, j] = taus[j, i] = (
+            (concordant[i, j] - discordant[i, j]) / denominator if denominator else np.nan
+        )
+    return taus
+
+
+def _close(a: float, b: float) -> bool:
+    return abs(a - b) <= 1e-8 + 1e-5 * abs(b)  # np.isclose, without its overhead

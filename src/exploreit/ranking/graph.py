@@ -1,13 +1,16 @@
 """The link graph that pages are ranked on, and the checks it has to pass."""
 
+import hashlib
 from collections import Counter, deque
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 
 from exploreit.crawler import CrawlResult
+from exploreit.models import Region
 
 MIN_PAGES = 20
 MIN_CYCLE = 3
@@ -25,6 +28,10 @@ class LinkGraph:
     links: tuple[tuple[str, str], ...]
     # Title, description, keywords and body of every page, when the crawl kept content.
     texts: Mapping[str, str] = field(default_factory=dict)
+    # Where on the source page each link stands; links not listed are in the content.
+    regions: Mapping[tuple[str, str], Region] = field(default_factory=dict)
+    # Duplicate URL -> the page it was merged into.
+    merged: Mapping[str, str] = field(default_factory=dict)
 
     @cached_property
     def out_links(self) -> dict[str, list[str]]:
@@ -50,30 +57,90 @@ class Requirement(BaseModel):
         return self.actual >= self.required
 
 
-def link_graph(result: CrawlResult, html_only: bool = True) -> LinkGraph:
+def link_graph(
+    result: CrawlResult, html_only: bool = True, merge_duplicates: bool = False
+) -> LinkGraph:
     """Build the ranking graph from a crawl.
 
     Only visited pages become nodes (by default only HTML pages, since images and
     other files have no links of their own). Links to unvisited pages, repeated links
     and links from a page to itself are left out: a page cannot vote for itself.
+
+    With `merge_duplicates`, addresses of one page become one node (see `duplicates`).
     """
     pages = tuple(dict.fromkeys(page.url for page in result.pages if page.is_html or not html_only))
-    known = set(pages)
-    links = tuple(
-        dict.fromkeys(
-            (edge.source, edge.target)
-            for edge in result.edges
-            if edge.source in known and edge.target in known and edge.source != edge.target
-        )
-    )
+    visited = set(pages)
     texts = {
         content.url: " ".join(
             [content.title, content.description, " ".join(content.keywords), content.body]
         )
         for content in result.contents
-        if content.url in known
+        if content.url in visited
     }
-    return LinkGraph(pages, links, texts)
+    merged = duplicates(pages, texts) if merge_duplicates else {}
+    pages = tuple(page for page in pages if page not in merged)
+    known = set(pages)
+    for duplicate, kept in merged.items():
+        if duplicate in texts and kept not in texts:
+            texts[kept] = texts[duplicate]
+    regions: dict[tuple[str, str], Region] = {}
+    for edge in result.edges:
+        source, target = merged.get(edge.source, edge.source), merged.get(edge.target, edge.target)
+        if source not in known or target not in known or source == target:
+            continue
+        # Two addresses of one page may link to the same target from different places.
+        if (source, target) not in regions or _more_prominent(edge.region, regions[source, target]):
+            regions[source, target] = edge.region
+    links = tuple(regions)
+    texts = {page: text for page, text in texts.items() if page in known}
+    return LinkGraph(pages, links, texts, regions, merged)
+
+
+def duplicates(pages: Iterable[str], texts: Mapping[str, str]) -> dict[str, str]:
+    """Map every duplicate address to the page it is a copy of.
+
+    Two addresses are one page when they differ only in http/https or a leading
+    "www.", or when the crawl stored exactly the same text for both (for example
+    "/" and "/page/1/"). The kept address is the https one, then the shortest.
+    """
+    groups: dict[str, str] = {}  # union-find: page -> a page of the same group
+
+    def root(page: str) -> str:
+        while groups.setdefault(page, page) != page:
+            page = groups[page]
+        return page
+
+    first_with: dict[str, str] = {}
+    for page in pages:
+        root(page)
+        keys = [_address_key(page)]
+        if text := texts.get(page, "").strip():
+            keys.append("text:" + hashlib.sha1(text.encode()).hexdigest())
+        for key in keys:
+            if key in first_with:
+                groups[root(page)] = root(first_with[key])
+            else:
+                first_with[key] = page
+
+    members: dict[str, list[str]] = {}
+    for page in groups:
+        members.setdefault(root(page), []).append(page)
+    result: dict[str, str] = {}
+    for group in members.values():
+        kept = min(group, key=lambda page: (not page.startswith("https:"), len(page), page))
+        result.update({page: kept for page in group if page != kept})
+    return result
+
+
+def _address_key(url: str) -> str:
+    parts = urlsplit(url)
+    host = parts.netloc.removeprefix("www.")
+    return f"url:{host}{parts.path}?{parts.query}"
+
+
+def _more_prominent(region: Region, than: Region) -> bool:
+    order = list(Region)
+    return order.index(region) < order.index(than)
 
 
 def check_requirements(graph: LinkGraph) -> list[Requirement]:

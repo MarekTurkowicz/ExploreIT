@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from exploreit.models import Region
 from exploreit.ranking.graph import LinkGraph
 
 type Matrix = NDArray[np.float64]
@@ -32,22 +33,29 @@ def adjacency_matrix(graph: LinkGraph, weighted: bool = False) -> Matrix:
 
 MUTUAL_LINK_WEIGHT = 0.5  # a link returned by its target counts half
 MENU_LINK_DISCOUNT = 0.9  # a link to a page every page links to keeps a tenth
+# A visitor follows a link in the text far more often than one in a menu or a footer.
+REGION_WEIGHTS = {Region.CONTENT: 1.0, Region.NAVIGATION: 0.5, Region.FOOTER: 0.25}
 
 
 def trusted_matrix(graph: LinkGraph) -> Matrix:
     """Weighted matrix that resists link spam, rows summing to 1 like 1/Nv.
 
-    Two kinds of links are trusted less before each page shares out its vote:
+    Three kinds of links are trusted less before each page shares out its vote:
+    - links in a menu, header or footer, rather than in the text (REGION_WEIGHTS);
     - mutual links (v -> u and u -> v), the classic "link to me and I link to you";
     - links to pages that nearly every page links to, which are navigation (menus,
       login, footer) rather than a recommendation: weight 1 - 0.9 * share of pages
-      linking to the target.
+      linking to the target. This also catches menus the page does not mark as such.
     """
-    matrix = adjacency_matrix(graph)
+    plain = adjacency_matrix(graph)
+    matrix = plain.copy()
+    index = {page: position for position, page in enumerate(graph.pages)}
+    for (source, target), region in graph.regions.items():
+        matrix[index[source], index[target]] = REGION_WEIGHTS[region]
     size = max(len(graph.pages), 1)
-    mutual = (matrix > 0) & (matrix.T > 0)
+    mutual = (plain > 0) & (plain.T > 0)
     matrix = np.where(mutual, matrix * MUTUAL_LINK_WEIGHT, matrix)
-    linked_from = (adjacency_matrix(graph) > 0).sum(axis=0) / size
+    linked_from = plain.sum(axis=0) / size
     matrix = matrix * (1 - MENU_LINK_DISCOUNT * linked_from)  # scales each column (target)
     out_links = matrix.sum(axis=1, keepdims=True)
     result: Matrix = np.divide(matrix, out_links, out=np.zeros_like(matrix), where=out_links > 0)
