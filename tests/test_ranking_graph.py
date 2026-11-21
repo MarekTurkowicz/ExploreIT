@@ -31,11 +31,11 @@ def test_graph_keeps_visited_html_pages_and_links_between_them() -> None:
         pages=[page(""), page("a"), page("logo.png", kind="image/png"), page("gone", status=404)],
         edges=[
             edge("", "a"),
-            edge("", "a"),  # the same link twice counts once
-            edge("a", "a"),  # a page does not vote for itself
+            edge("", "a"),
+            edge("a", "a"),
             edge("a", ""),
-            edge("a", "logo.png"),  # not an HTML page
-            edge("a", "https://other.org/"),  # not visited
+            edge("a", "logo.png"),
+            edge("a", "https://other.org/"),
         ],
         failed={},
     )
@@ -49,7 +49,6 @@ def test_graph_keeps_visited_html_pages_and_links_between_them() -> None:
 
 def test_shortest_cycle_of_three_or_more_pages() -> None:
     assert shortest_cycle(graph("a>b", "b>c", "c>a")) == ["a", "b", "c"]
-    # A square with a two-way diagonal: the shortest 3+ cycle uses the diagonal once.
     assert len(shortest_cycle(graph("a>b", "b>c", "c>d", "d>a", "a>c", "c>a"))) == 3
 
 
@@ -58,8 +57,6 @@ def test_two_page_cycles_do_not_count() -> None:
 
 
 def test_cycle_hidden_behind_a_shortcut_is_found() -> None:
-    # x -> y is a shortcut: a depth-first search reaching y first sees only x <-> y,
-    # but x -> p -> y -> x is a real three-page cycle.
     assert sorted(shortest_cycle(graph("x>y", "y>x", "x>p", "p>y"))) == ["p", "x", "y"]
 
 
@@ -71,7 +68,6 @@ def test_shortest_cycle_is_preferred() -> None:
 
 
 def test_requirements() -> None:
-    # 20 pages in a ring (a cycle of 20) plus extra links into p0, p1 and p2.
     ring = [f"p{i}>p{(i + 1) % 20}" for i in range(20)]
     extra = ["p5>p0", "p6>p0", "p7>p1", "p8>p2"]
 

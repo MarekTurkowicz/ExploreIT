@@ -40,7 +40,7 @@ class Preloader:
         self._queue: deque[str] = deque()
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
-        self.loaded: list[str] = []  # in the order they were imported, for the status bar
+        self.loaded: list[str] = []
 
     def load(self, modules: Iterable[str]) -> None:
         """Queue modules after those already waiting."""
@@ -115,7 +115,7 @@ class TaskRunner:
         def target() -> None:
             try:
                 result = work()
-            except Exception as error:  # show any failure in the window instead of losing it
+            except Exception as error:
                 self.call(on_error, error)
             else:
                 self.call(on_done, result)
@@ -140,7 +140,7 @@ class TaskRunner:
         self._after = self._root.after(POLL_MS, self._poll)
 
     def _stop(self, event: tk.Event[tk.Misc]) -> None:
-        if event.widget is self._root:  # children send <Destroy> too
+        if event.widget is self._root:
             self._root.after_cancel(self._after)
             gc.enable()
 
@@ -181,7 +181,7 @@ class Table(ttk.Frame):
             self.tree.heading(column, text=column, command=partial(self._sort, column))
             width = widths[index] if index < len(widths) else 120
             width = max(round(width * dpi_scale), heading_font.measure(column) + 24)
-            self.tree.column(column, width=width, stretch=True)  # all share the spare room
+            self.tree.column(column, width=width, stretch=True)
         for row in rows:
             self.tree.insert("", "end", values=[str(value) for value in row])
 
@@ -194,7 +194,7 @@ class Table(ttk.Frame):
 
     def _sort(self, column: str) -> None:
         items = [(self.tree.set(item, column), item) for item in self.tree.get_children()]
-        descending = self._sorted_by == column  # a second click reverses the order
+        descending = self._sorted_by == column
         items.sort(key=lambda pair: _sort_key(pair[0]), reverse=descending)
         for index, (_, item) in enumerate(items):
             self.tree.move(item, "", index)
@@ -211,8 +211,6 @@ class ChartPanel(ttk.Frame):
     def show(self, figure: Figure) -> FigureCanvasTkAgg:
         for child in self.winfo_children():
             child.destroy()
-        # The old chart holds Tk images that may only be freed in this thread. Collect it
-        # now, or Python may free it later in a worker thread and Tk would complain.
         gc.collect()
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
@@ -221,11 +219,9 @@ class ChartPanel(ttk.Frame):
         if self.toolbar:
             NavigationToolbar2Tk(canvas, self, pack_toolbar=False).pack(side="bottom", fill="x")
         widget = canvas.get_tk_widget()
-        # Ask for little room and fill whatever the layout gives: the figure is redrawn to
-        # fit, instead of forcing the window to its own size in inches.
         widget.configure(width=200, height=150)
         widget.pack(fill="both", expand=True)
-        canvas.draw_idle()  # once, after the layout has sized the widget
+        canvas.draw_idle()
         return canvas
 
     def _match_theme(self, figure: Figure) -> None:

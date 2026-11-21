@@ -30,15 +30,15 @@ class Settings:
     normalization: Normalization = Normalization.SUM
     dangling: Dangling = Dangling.LOST
     smoothing: float = 0.0
-    jump: float = 0.0  # random jump to any page; 0 keeps the plain formula
+    jump: float = 0.0
     tolerance: float = 1e-6
     max_iterations: int = 200
-    cascade_words: int = 10  # words in the first round of the word cascade
-    weight_links: float = 0.5  # parts of ExploreIT rank
+    cascade_words: int = 10
+    weight_links: float = 0.5
     weight_text: float = 0.3
     weight_bridges: float = 0.2
-    weight_query: float = 0.5  # used only with a query
-    query: str = ""  # search words; when set, ExploreIT rank answers this query
+    weight_query: float = 0.5
+    query: str = ""
 
 
 DEFAULT_SETTINGS = Settings()
@@ -51,8 +51,8 @@ class Scores:
     values: np.ndarray
     iterations: int = 0
     converged: bool = True
-    history: list[np.ndarray] = field(default_factory=list)  # for iterative methods
-    eigenvalue: float = float("nan")  # only the eigenvector method has one
+    history: list[np.ndarray] = field(default_factory=list)
+    eigenvalue: float = float("nan")
 
 
 @dataclass(frozen=True)
@@ -136,9 +136,9 @@ def _trusted_prestige(graph: LinkGraph, settings: Settings) -> Scores:
         trusted_matrix(graph),
         graph.pages,
         normalization=settings.normalization,
-        dangling=Dangling.SPREAD,  # a page without links out shares its vote with everyone
-        smoothing=max(settings.smoothing, 0.15),  # never swap back and forth
-        jump=max(settings.jump, TRUSTED_JUMP),  # never fall into a trap of linked pages
+        dangling=Dangling.SPREAD,
+        smoothing=max(settings.smoothing, 0.15),
+        jump=max(settings.jump, TRUSTED_JUMP),
         tolerance=settings.tolerance,
         max_iterations=settings.max_iterations,
     )
@@ -174,7 +174,6 @@ def _explore_rank(graph: LinkGraph, settings: Settings) -> Scores:
         (settings.weight_bridges, betweenness(graph)),
         (settings.weight_query, query),
     ]
-    # A part that is all zeros (no stored content, no query) leaves its weight unused.
     used = [(weight, values) for weight, values in parts if weight > 0 and values.max() > 0]
     total = sum(weight for weight, _ in used) or 1.0
     combined = sum(weight / total * values / values.max() for weight, values in used)
@@ -292,7 +291,7 @@ def kendall_tau(first: np.ndarray, second: np.ndarray) -> float:
     return float(kendall_taus([first, second])[0, 1])
 
 
-ROWS_AT_ONCE = 256  # pages compared with all others in one step; bounds the memory used
+ROWS_AT_ONCE = 256
 
 
 def kendall_taus(rankings: Sequence[np.ndarray]) -> np.ndarray:
@@ -307,7 +306,7 @@ def kendall_taus(rankings: Sequence[np.ndarray]) -> np.ndarray:
     columns = np.arange(size)
     for start in range(0, size, ROWS_AT_ONCE):
         rows = np.arange(start, min(start + ROWS_AT_ONCE, size))
-        later = columns[None, :] > rows[:, None]  # each pair of pages once
+        later = columns[None, :] > rows[:, None]
         orders = []
         for values in scores:
             here, there = values[rows][:, None], values[None, :]
@@ -321,7 +320,6 @@ def kendall_taus(rankings: Sequence[np.ndarray]) -> np.ndarray:
             untied[i, i] += np.count_nonzero(orders[i])
     taus = np.eye(count)
     for i, j in combinations(range(count), 2):
-        # tau-b = (C - D) / sqrt(pairs untied in the first * pairs untied in the second)
         denominator = np.sqrt(untied[i, i] * untied[j, j])
         taus[i, j] = taus[j, i] = (
             (concordant[i, j] - discordant[i, j]) / denominator if denominator else np.nan
@@ -330,4 +328,4 @@ def kendall_taus(rankings: Sequence[np.ndarray]) -> np.ndarray:
 
 
 def _close(a: float, b: float) -> bool:
-    return abs(a - b) <= 1e-8 + 1e-5 * abs(b)  # np.isclose, without its overhead
+    return abs(a - b) <= 1e-8 + 1e-5 * abs(b)

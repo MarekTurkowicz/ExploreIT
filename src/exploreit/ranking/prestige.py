@@ -32,8 +32,8 @@ from exploreit.ranking.matrix import Matrix
 @dataclass(frozen=True)
 class PrestigeResult:
     pages: tuple[str, ...]
-    scores: np.ndarray  # final prestige, in `pages` order
-    history: list[np.ndarray]  # prestige before the first step and after every step
+    scores: np.ndarray
+    history: list[np.ndarray]
     converged: bool
 
     @property

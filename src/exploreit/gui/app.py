@@ -27,14 +27,11 @@ LIGHT_THEME, DARK_THEME = "nord-light", "nord-dark"
 DEFAULT_FONT_SIZE = 18
 FONT_SIZES = range(10, 31)
 
-# What each part of the window needs, heaviest libraries included. They load in the
-# background, in this order, right after the window appears: the crawl first, since
-# that is what a session starts with, then what showing a crawl needs, then charts.
 CRAWL_MODULES = ["pydantic", "httpx", "bs4", "lxml.etree", "exploreit.config", "exploreit.crawler"]
 RESULT_MODULES = ["exploreit.graph", "exploreit.export", "exploreit.storage", "networkx"]
 RANKING_MODULES = ["numpy", "exploreit.ranking.methods"]
 CHART_MODULES = ["pandas", "matplotlib.figure", "exploreit.plots"]
-LAYOUT_MODULES = ["scipy.sparse"]  # networkx needs it for big graph layouts
+LAYOUT_MODULES = ["scipy.sparse"]
 EXPERIMENT_MODULES = ["exploreit.experiments"]
 WARM_UP = [
     *CRAWL_MODULES,
@@ -120,7 +117,7 @@ class ExploreApp:
             width=4,
             command=lambda: self.set_font_size(self.font_size.get()),
         )
-        for event in ("<Return>", "<FocusOut>"):  # a typed size, not only the arrows
+        for event in ("<Return>", "<FocusOut>"):
             size.bind(event, lambda _: self._apply_typed_size())
         size.pack(side="right")
         ttk.Label(bar, text="Text size").pack(side="right", padx=(0, 6))
@@ -140,7 +137,7 @@ class ExploreApp:
 
     def set_theme(self, name: str) -> None:
         self.root.style.theme_use(name)
-        self.set_font_size(self.font_size.get())  # a theme resets some widget fonts
+        self.set_font_size(self.font_size.get())
         self._style_inputs()
         self.crawl_tab.apply_theme()
         self.content_tab.apply_theme()
@@ -157,7 +154,7 @@ class ExploreApp:
         size can be too big for them.
         """
         width, height = screen or (self.root.winfo_screenwidth(), self.root.winfo_screenheight())
-        height = round(height * 0.85)  # room for the taskbar, title bar and some air
+        height = round(height * 0.85)
         size = self.font_size.get()
         while True:
             self.root.update_idletasks()
@@ -170,7 +167,7 @@ class ExploreApp:
     def _apply_typed_size(self) -> None:
         try:
             self.set_font_size(self.font_size.get())
-        except tk.TclError:  # not a number
+        except tk.TclError:
             self.font_size.set(round(tkfont.nametofont("TkDefaultFont").actual()["size"]))
 
     def set_font_size(self, size: int) -> None:
@@ -241,9 +238,9 @@ class ExploreApp:
 def _maximise(root: tk.Tk) -> None:
     """Start with the whole screen, so the larger text never squeezes the layout."""
     try:
-        root.state("zoomed")  # Windows and macOS
+        root.state("zoomed")
     except tk.TclError:
-        root.attributes("-zoomed", True)  # X11
+        root.attributes("-zoomed", True)
 
 
 def _all_widgets[W: tk.Misc](parent: tk.Misc, kind: type[W]) -> list[W]:
@@ -270,6 +267,5 @@ def run_app(data_dir: Path = Path("data")) -> None:
     root.attributes("-topmost", True)
     root.after(800, lambda: root.attributes("-topmost", False))
     root.focus_force()
-    # Show the window first, then load the slow libraries while the user looks around.
     root.after(100, lambda: app.preloader.load(WARM_UP))
     root.mainloop()

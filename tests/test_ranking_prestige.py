@@ -34,7 +34,6 @@ def test_symmetric_cycle_is_already_stable() -> None:
 
 
 def test_page_with_more_links_in_ranks_higher() -> None:
-    # a, b and c all link to hub; hub links back to a.
     result = run(graph("a>hub", "b>hub", "c>hub", "hub>a", "a>b"), max_iterations=500)
 
     assert result.ranking()[0][1] == "hub"
@@ -56,7 +55,6 @@ def test_without_normalisation_values_grow_in_cycles() -> None:
 
 
 def test_alternating_graph_never_settles_without_smoothing() -> None:
-    # b is linked from a and c, and links to both: prestige swaps between b and {a, c}.
     g = graph("a>b", "b>a", "b>c", "c>b")
 
     plain = run(g, max_iterations=50)
@@ -98,7 +96,7 @@ def test_weighted_prestige_matches_pagerank_without_damping() -> None:
 
 
 def test_dangling_prestige_is_lost_or_shared() -> None:
-    g = graph("a>b", "b>c")  # c links nowhere
+    g = graph("a>b", "b>c")
 
     lost = run(g, weighted=True, normalization=Normalization.NONE, max_iterations=1)
     shared = run(
@@ -109,7 +107,7 @@ def test_dangling_prestige_is_lost_or_shared() -> None:
         dangling=Dangling.SPREAD,
     )
 
-    assert lost.scores.sum() == pytest.approx(2)  # c's vote vanished
+    assert lost.scores.sum() == pytest.approx(2)
     assert shared.scores.sum() == pytest.approx(3)
 
 
@@ -125,7 +123,6 @@ def test_smoothing_must_be_below_one() -> None:
 
 
 def test_pages_linking_only_to_each_other_trap_all_prestige() -> None:
-    # x and y link only to each other; everyone else eventually feeds them.
     g = graph("a>b", "b>a", "a>x", "b>c", "c>a", "c>y", "x>y", "y>x")
 
     trapped = run(g, weighted=True, max_iterations=2000, smoothing=0.2)
@@ -133,7 +130,7 @@ def test_pages_linking_only_to_each_other_trap_all_prestige() -> None:
 
     scores = dict(zip(g.pages, trapped.scores, strict=True))
     assert scores["x"] + scores["y"] == pytest.approx(len(g.pages), rel=1e-3)
-    assert min(jumping.scores) > 0.1  # with a random jump nobody drops to zero
+    assert min(jumping.scores) > 0.1
 
 
 def test_jump_must_be_below_one() -> None:

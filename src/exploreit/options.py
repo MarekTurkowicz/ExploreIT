@@ -32,13 +32,13 @@ class ContentField(StrEnum):
 class Normalization(StrEnum):
     """How prestige is rescaled after every step."""
 
-    SUM = "sum"  # values add up to the number of pages, so the average stays 1
-    MAX = "max"  # the best page has prestige 1
-    NONE = "none"  # raw values, to show why normalisation is needed
+    SUM = "sum"
+    MAX = "max"
+    NONE = "none"
 
 
 class Dangling(StrEnum):
     """What happens to the prestige of a page without outgoing links."""
 
-    LOST = "lost"  # its vote goes nowhere, as the plain formula says
-    SPREAD = "spread"  # its vote is shared equally by all pages
+    LOST = "lost"
+    SPREAD = "spread"

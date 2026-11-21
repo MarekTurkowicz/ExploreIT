@@ -26,11 +26,8 @@ class LinkGraph:
 
     pages: tuple[str, ...]
     links: tuple[tuple[str, str], ...]
-    # Title, description, keywords and body of every page, when the crawl kept content.
     texts: Mapping[str, str] = field(default_factory=dict)
-    # Where on the source page each link stands; links not listed are in the content.
     regions: Mapping[tuple[str, str], Region] = field(default_factory=dict)
-    # Duplicate URL -> the page it was merged into.
     merged: Mapping[str, str] = field(default_factory=dict)
 
     @cached_property
@@ -88,7 +85,6 @@ def link_graph(
         source, target = merged.get(edge.source, edge.source), merged.get(edge.target, edge.target)
         if source not in known or target not in known or source == target:
             continue
-        # Two addresses of one page may link to the same target from different places.
         if (source, target) not in regions or _more_prominent(edge.region, regions[source, target]):
             regions[source, target] = edge.region
     links = tuple(regions)
@@ -103,7 +99,7 @@ def duplicates(pages: Iterable[str], texts: Mapping[str, str]) -> dict[str, str]
     "www.", or when the crawl stored exactly the same text for both (for example
     "/" and "/page/1/"). The kept address is the https one, then the shortest.
     """
-    groups: dict[str, str] = {}  # union-find: page -> a page of the same group
+    groups: dict[str, str] = {}
 
     def root(page: str) -> str:
         while groups.setdefault(page, page) != page:
@@ -185,7 +181,7 @@ def shortest_cycle(graph: LinkGraph, min_length: int = MIN_CYCLE) -> list[str]:
         if len(cycle) >= min_length and (not best or len(cycle) < len(best)):
             best = cycle
             if len(best) == min_length:
-                break  # cannot get any shorter
+                break
     return best
 
 

@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 class ResultsTab(ttk.Frame):
     """Graph statistics, pages per level and the site structure as a tree."""
 
-    # Set by show(); the buttons that use them stay disabled until then.
     result: CrawlResult
     crawl_file: Path
 
@@ -77,7 +76,7 @@ class ResultsTab(ttk.Frame):
         from exploreit.graph import compute_stats
 
         self.result, self.crawl_file = result, path
-        self.file_label.configure(text=path.name)  # the full path is in the status bar
+        self.file_label.configure(text=path.name)
         self.stats.set_rows(["Metric", "Value"], compute_stats(result).summary(), widths=[190])
         from exploreit.plots import levels_figure
 
@@ -170,7 +169,6 @@ class PagesTab(ttk.Frame):
 class ContentTab(ttk.Frame):
     """Stored page content: a table of pages and the full text of the selected one."""
 
-    # Set by show(); the save buttons stay disabled until then.
     result: CrawlResult
     crawl_file: Path
 

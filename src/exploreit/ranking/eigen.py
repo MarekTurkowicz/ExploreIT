@@ -21,8 +21,8 @@ from exploreit.ranking.matrix import Matrix
 
 @dataclass(frozen=True)
 class EigenResult:
-    value: float  # the largest eigenvalue of A^T, which A shares
-    vector: np.ndarray  # its eigenvector, non-negative and scaled to sum to 1
+    value: float
+    vector: np.ndarray
     iterations: int
     converged: bool
 
@@ -46,7 +46,6 @@ def leading_eigenvector(
         if change <= tolerance:
             converged = True
             break
-    # Rayleigh quotient: the eigenvalue that best fits the vector found.
     value = float(vector @ (transposed @ vector) / (vector @ vector))
     return EigenResult(value, vector, iterations, converged)
 

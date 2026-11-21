@@ -31,9 +31,8 @@ def adjacency_matrix(graph: LinkGraph, weighted: bool = False) -> Matrix:
     return matrix
 
 
-MUTUAL_LINK_WEIGHT = 0.5  # a link returned by its target counts half
-MENU_LINK_DISCOUNT = 0.9  # a link to a page every page links to keeps a tenth
-# A visitor follows a link in the text far more often than one in a menu or a footer.
+MUTUAL_LINK_WEIGHT = 0.5
+MENU_LINK_DISCOUNT = 0.9
 REGION_WEIGHTS = {Region.CONTENT: 1.0, Region.NAVIGATION: 0.5, Region.FOOTER: 0.25}
 
 
@@ -56,7 +55,7 @@ def trusted_matrix(graph: LinkGraph) -> Matrix:
     mutual = (plain > 0) & (plain.T > 0)
     matrix = np.where(mutual, matrix * MUTUAL_LINK_WEIGHT, matrix)
     linked_from = plain.sum(axis=0) / size
-    matrix = matrix * (1 - MENU_LINK_DISCOUNT * linked_from)  # scales each column (target)
+    matrix = matrix * (1 - MENU_LINK_DISCOUNT * linked_from)
     out_links = matrix.sum(axis=1, keepdims=True)
     result: Matrix = np.divide(matrix, out_links, out=np.zeros_like(matrix), where=out_links > 0)
     return result

@@ -27,7 +27,6 @@ WEIGHTS = {"links": "0.5", "text": "0.3", "bridges": "0.2", "query": "0.5"}
 class RankingTab(ttk.Frame):
     """Settings and results of ranking the pages of the current crawl."""
 
-    # Set by show() and compute(); the buttons that need them stay disabled until then.
     result: CrawlResult
     crawl_file: Path
     graph: LinkGraph
@@ -123,7 +122,6 @@ class RankingTab(ttk.Frame):
         self.compute_button.pack(side="left")
         self.compute_button.state(["disabled"])
         ttk.Label(actions, text="Show on graph").pack(side="left", padx=(18, 6))
-        # The method names come with the ranking code, loaded in the background.
         self.method_choice = ttk.Combobox(
             actions, textvariable=self.on_graph, state="readonly", width=18
         )
@@ -178,7 +176,6 @@ class RankingTab(ttk.Frame):
         lines.append(f"{len(self.graph.pages)} pages, {len(self.graph.links)} links between them")
         if self.graph.merged:
             lines.append(f"{len(self.graph.merged)} duplicate addresses merged")
-        # The graph tab can name pages P1, P2 ... like the matrices; a copy shares its name.
         names = labels | {copy: labels[kept] for copy, kept in self.graph.merged.items()}
         self.app.graph_tab.set_short_names(names)
         self.checks.configure(text="\n".join(lines))
@@ -296,7 +293,6 @@ class RankingTab(ttk.Frame):
             return
         result = chosen[0]
         scores = dict(zip(self.graph.pages, result.scores.values.tolist(), strict=True))
-        # A merged duplicate is drawn with the score of the page it is a copy of.
         scores |= {copy: scores[kept] for copy, kept in self.graph.merged.items()}
         self.app.graph_tab.show_prestige(scores)
         self.app.notebook.select(self.app.graph_tab)

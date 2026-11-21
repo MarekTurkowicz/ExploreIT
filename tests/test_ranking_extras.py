@@ -25,9 +25,6 @@ from exploreit.ranking.query import query_match, query_words
 SITE = "https://s.com/"
 
 
-# Where a link stands
-
-
 def regions(html: str) -> dict[str, Region]:
     return {
         link.url.removeprefix(SITE): link.region for link in extract_links(html, SITE, LinkMode.ALL)
@@ -51,8 +48,8 @@ def test_link_region_comes_from_enclosing_elements() -> None:
         "m": Region.NAVIGATION,
         "r": Region.NAVIGATION,
         "a": Region.CONTENT,
-        "c": Region.CONTENT,  # "canvas" contains "nav" but is not navigation
-        "f": Region.FOOTER,  # a menu inside a footer is still the footer
+        "c": Region.CONTENT,
+        "f": Region.FOOTER,
         "g": Region.FOOTER,
     }
 
@@ -74,9 +71,6 @@ def test_trusted_matrix_counts_menu_and_footer_links_less() -> None:
 
     assert row.sum() == pytest.approx(1)
     assert row[1] == pytest.approx(2 * row[2]) == pytest.approx(4 * row[3])
-
-
-# Duplicate pages
 
 
 def test_duplicates_merge_scheme_www_and_same_text() -> None:
@@ -108,8 +102,8 @@ def test_link_graph_merges_duplicates_and_their_links() -> None:
         pages=[page("http://s.com/"), page(SITE), page(SITE + "a")],
         edges=[
             edge("http://s.com/", SITE + "a", Region.FOOTER),
-            edge(SITE, SITE + "a"),  # the same link from the other copy, more prominent
-            edge("http://s.com/", SITE),  # becomes a link to itself
+            edge(SITE, SITE + "a"),
+            edge("http://s.com/", SITE),
             edge(SITE + "a", "http://s.com/", Region.NAVIGATION),
         ],
         failed={},
@@ -122,11 +116,8 @@ def test_link_graph_merges_duplicates_and_their_links() -> None:
     assert graph.merged == {"http://s.com/": SITE}
     assert graph.links == ((SITE, SITE + "a"), (SITE + "a", SITE))
     assert graph.regions[SITE, SITE + "a"] is Region.CONTENT
-    assert graph.texts[SITE] == "home   "  # the copy's text moves to the kept page
-    assert len(link_graph(result).pages) == 3  # merging is a choice
-
-
-# Search query
+    assert graph.texts[SITE] == "home   "
+    assert len(link_graph(result).pages) == 3
 
 
 TEXTS = {
@@ -170,12 +161,9 @@ def test_explore_rank_with_query_keeps_only_matching_pages() -> None:
     assert result.scores.values[1] > 0
 
 
-# Kendall tau
-
-
 def test_kendall_tau_matches_scipy_with_ties() -> None:
     generator = np.random.default_rng(1)
-    first = generator.integers(0, 5, 600).astype(float)  # more pages than one block
+    first = generator.integers(0, 5, 600).astype(float)
     second = first + generator.integers(0, 3, 600)
 
     assert kendall_tau(first, second) == pytest.approx(kendalltau(first, second).statistic)
@@ -202,10 +190,8 @@ def test_query_joins_the_mix_instead_of_replacing_the_cascade() -> None:
     )
     mixed = compare(graph, Settings(cascade_words=2, query="python"), [explore]).results[0]
 
-    # Without weight the query only filters: matching pages keep the plain mix.
     assert filtered[:2] == pytest.approx(plain[:2])
     assert filtered[2] == 0
-    # With weight it also moves the page that matches best further up.
     assert mixed.scores.values[0] - mixed.scores.values[1] > plain[0] - plain[1]
 
 

@@ -95,7 +95,7 @@ def comparison_table(results: Iterable[CrawlResult]) -> pd.DataFrame:
                 **stats,
             }
         )
-    import pandas as pd  # slow to load, so only when a table is built
+    import pandas as pd
 
     return pd.DataFrame(rows, columns=[*PARAMETERS, *GraphStats.model_fields])
 

@@ -17,9 +17,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-WORD = re.compile(r"[^\W\d_]{3,}")  # letters only, any alphabet, at least three of them
+WORD = re.compile(r"[^\W\d_]{3,}")
 
-# Words that appear everywhere and say nothing about a page's topic.
 _STOPWORDS = """
     the and for are but not you all any can had her was one our out has have from this that
     with they them their there which will would about into than then what when who your
@@ -36,9 +35,9 @@ STOPWORDS = frozenset(re.findall(r"\S+", _STOPWORDS))
 
 @dataclass(frozen=True)
 class Cascade:
-    rounds: list[list[str]]  # the words of every round, most repeated first
-    hits: np.ndarray  # hits[page, round]: how many of that round's words the page uses
-    scores: np.ndarray  # one number per page that keeps the round-by-round order
+    rounds: list[list[str]]
+    hits: np.ndarray
+    scores: np.ndarray
 
 
 def words(text: str) -> set[str]:
@@ -46,7 +45,7 @@ def words(text: str) -> set[str]:
     return {word for word in WORD.findall(text.lower()) if word not in STOPWORDS}
 
 
-TEMPLATE_SHARE = 0.8  # a word on more than this share of pages is template text
+TEMPLATE_SHARE = 0.8
 
 
 def word_cascade(
@@ -59,7 +58,6 @@ def word_cascade(
     if start < 1:
         raise ValueError("the first round needs at least one word")
     vocabulary = [words(texts.get(page, "")) for page in pages]
-    # "Repeated" means used on many pages, so one long page cannot fill a round alone.
     on_pages = Counter(word for page_words in vocabulary for word in page_words)
     with_text = sum(bool(page_words) for page_words in vocabulary)
     ranked = sorted(
@@ -80,7 +78,5 @@ def word_cascade(
         [[len(page_words & set(chunk)) for chunk in rounds] for page_words in vocabulary],
         dtype=float,
     ).reshape(len(pages), len(rounds))
-    # A round can add at most `start` points, so weighting round r by (start + 1)^-r
-    # never lets a later round outweigh an earlier one.
     weights = float(start + 1) ** -np.arange(len(rounds))
     return Cascade(rounds, hits, hits @ weights)

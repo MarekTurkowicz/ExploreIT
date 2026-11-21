@@ -37,7 +37,6 @@ from exploreit.urls import Scope
 app = typer.Typer(help="ExploreIT: web structure exploration toolkit.", no_args_is_help=True)
 console = Console()
 
-# Options shared by `crawl` and `experiment`.
 MaxDepth = Annotated[int, typer.Option(help="Deepest level to visit (0 = start page only).")]
 MaxPages = Annotated[int, typer.Option(help="Stop a crawl after this many pages.")]
 Delay = Annotated[float, typer.Option(help="Seconds between requests to the same host.")]
@@ -75,7 +74,7 @@ def ui(
     ),
 ) -> None:
     """Open the desktop application."""
-    from exploreit.gui.app import run_app  # Tk and the charts load only for this command
+    from exploreit.gui.app import run_app
 
     run_app(data_dir)
 

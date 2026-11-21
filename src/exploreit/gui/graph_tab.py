@@ -28,19 +28,18 @@ from exploreit.gui.graph_model import (
     top_prestige,
 )
 
-SLOW_LAYOUT_NODES = 300  # Kamada-Kawai takes seconds here and minutes at 1000
+SLOW_LAYOUT_NODES = 300
 
 if TYPE_CHECKING:
     from exploreit.crawler import CrawlResult
     from exploreit.gui.app import ExploreApp
 
-LABELS_BY_DEFAULT_UP_TO = 80  # more labels than this turn into an unreadable carpet
+LABELS_BY_DEFAULT_UP_TO = 80
 
 
 class GraphTab(ttk.Frame):
     """Drag pages, zoom with the mouse wheel, hover a page for its details."""
 
-    # Set by show(); the controls only act once a crawl is loaded.
     result: CrawlResult
     crawl_file: Path
 
@@ -48,7 +47,7 @@ class GraphTab(ttk.Frame):
         super().__init__(master, padding=10)
         self.app = app
         self.data = GraphData({}, [])
-        self.prestige: dict[str, float] = {}  # set by the Ranking tab
+        self.prestige: dict[str, float] = {}
         self.layout = tk.StringVar(value=Layout.LEVELS)
         self.colour_by = tk.StringVar(value=ColourBy.LEVEL)
         self.size_by = tk.StringVar(value=SizeBy.LINKS_IN)
@@ -57,7 +56,7 @@ class GraphTab(ttk.Frame):
         self.edges = tk.BooleanVar(value=True)
         self.unvisited = tk.BooleanVar(value=False)
         self.matrix_labels = tk.BooleanVar(value=False)
-        self.short_names: dict[str, str] = {}  # set by the Ranking tab
+        self.short_names: dict[str, str] = {}
         self._build()
 
     def _build(self) -> None:

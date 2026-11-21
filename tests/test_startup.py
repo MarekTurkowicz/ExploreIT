@@ -26,11 +26,11 @@ def test_preloader_imports_preferred_modules_first(monkeypatch: pytest.MonkeyPat
     imported: list[str] = []
     monkeypatch.setattr("exploreit.gui.widgets.importlib.import_module", imported.append)
     preloader = Preloader()
-    preloader._start = lambda: None  # type: ignore[method-assign]  # run by hand below
+    preloader._start = lambda: None  # type: ignore[method-assign]
 
     preloader.load(["fake.a", "fake.b", "fake.c"])
     preloader.prefer(["fake.c"])
-    preloader.load(["fake.a", "fake.d"])  # already waiting: not queued twice
+    preloader.load(["fake.a", "fake.d"])
     preloader._run()
 
     assert imported == ["fake.c", "fake.a", "fake.b", "fake.d"]

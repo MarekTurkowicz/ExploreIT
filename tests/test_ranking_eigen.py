@@ -36,7 +36,6 @@ def test_eigenvalue_of_a_cycle_is_one() -> None:
 
 
 def test_shift_lets_alternating_graphs_converge() -> None:
-    # Pages split into {b} and {a, c} that point at each other: eigenvalues +-sqrt(2).
     matrix = adjacency_matrix(graph("a>b", "b>a", "b>c", "c>b"))
 
     plain = leading_eigenvector(matrix, shift=0.0, max_iterations=200)

@@ -9,7 +9,6 @@ from exploreit.models import Link, LinkKind, Region
 from exploreit.options import LinkMode
 from exploreit.urls import normalize_url
 
-# Element name -> (attribute holding the URL, kind of link).
 LINK_ATTRIBUTES: dict[str, tuple[str, LinkKind]] = {
     "a": ("href", LinkKind.ANCHOR),
     "area": ("href", LinkKind.ANCHOR),
@@ -48,7 +47,6 @@ def extract_links(html: str | BeautifulSoup, page_url: str, mode: LinkMode) -> l
             continue
         region = page_region(tag)
         known = links.get(url)
-        # A URL linked both from the menu and from the text counts where it stands out most.
         if known is None or REGION_ORDER[region] < REGION_ORDER[known.region]:
             links[url] = Link(url=url, kind=kind, region=region)
     return list(links.values())

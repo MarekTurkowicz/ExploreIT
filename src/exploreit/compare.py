@@ -20,9 +20,9 @@ TOP_KEYWORDS = 5
 @dataclass(frozen=True)
 class Database:
     path: Path
-    columns: list[str]  # as written in the header
+    columns: list[str]
     separator: str
-    records: list[dict[str, str]]  # keyed by lower-case column name
+    records: list[dict[str, str]]
 
     def column(self, name: str) -> list[str]:
         return [record.get(name, "") for record in self.records]
@@ -56,7 +56,7 @@ def load_database(path: Path) -> Database:
     try:
         separator = csv.Sniffer().sniff(text.splitlines()[0], delimiters=",;\t|").delimiter
     except csv.Error:
-        separator = ","  # a single column has no separator to find
+        separator = ","
     rows = list(csv.reader(text.splitlines(), delimiter=separator))
     columns = rows[0]
     names = [column.strip().lower() for column in columns]
