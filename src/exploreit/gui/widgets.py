@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import importlib
 import queue
+import re
 import sys
 import threading
 import time
@@ -291,9 +292,18 @@ def show_error(error: Exception) -> None:
     messagebox.showerror("ExploreIT", f"{type(error).__name__}: {error}")
 
 
-def _sort_key(value: str) -> tuple[int, float | str]:
-    """Sort numbers numerically and before text."""
-    try:
-        return (0, float(value))
-    except ValueError:
-        return (1, value.lower())
+LEADING_NUMBER = re.compile(r"\s*(-?\d+(?:\.\d+)?)")
+DIGITS = re.compile(r"(\d+)")
+
+
+def _sort_key(value: str) -> tuple[int, float, tuple[tuple[int, int | str], ...]]:
+    """Sort by the number a cell starts with, e.g. the place in "12.  0.357", then as
+    text with numbers inside compared as numbers, so P2 comes before P10."""
+    if number := LEADING_NUMBER.match(value):
+        return (0, float(number.group(1)), ())
+    parts = tuple(
+        (0, int(part)) if part.isdigit() else (1, part.lower())
+        for part in DIGITS.split(value)
+        if part
+    )
+    return (1, 0.0, parts)

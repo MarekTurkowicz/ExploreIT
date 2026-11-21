@@ -284,6 +284,17 @@ def test_table_sorts_numbers_numerically(app: ExploreApp) -> None:
     assert [row[1] for row in table.rows()] == ["100", "10", "9"]
 
 
+def test_table_sorts_ranking_cells_by_place_and_labels_naturally(app: ExploreApp) -> None:
+    table = Table(app.root)
+    rows = [("P10", "12.  0.357"), ("P2", "1.  0.704"), ("P1", "2.  0.562"), ("P22", "10.  0.36")]
+    table.set_rows(["Page", "ExploreIT rank"], rows)
+
+    table._sort("ExploreIT rank")
+    assert [row[1].split(".")[0] for row in table.rows()] == ["1", "2", "10", "12"]
+    table._sort("Page")
+    assert [row[0] for row in table.rows()] == ["P1", "P2", "P10", "P22"]
+
+
 @pytest.mark.usefixtures("site")
 def test_stop_button_ends_the_crawl_early(app: ExploreApp) -> None:
     fill_form(app)
