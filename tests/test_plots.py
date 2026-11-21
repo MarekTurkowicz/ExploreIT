@@ -74,3 +74,15 @@ def test_convergence_figure(tmp_path: Path) -> None:
     save_figure(convergence_figure(histories), tmp_path / "c.png")
 
     assert (tmp_path / "c.png").read_bytes().startswith(PNG_SIGNATURE)
+
+
+def test_matrix_figure_writes_values_only_for_small_matrices() -> None:
+    import numpy as np
+
+    from exploreit.plots import matrix_figure
+
+    small = matrix_figure(np.array([[0, 1], [0.5, 0]]), ["P1", "P2"], "A")
+    big = matrix_figure(np.ones((30, 30)), [f"P{i}" for i in range(30)], "A")
+
+    assert sorted(text.get_text() for text in small.axes[0].texts) == [".50", "1"]
+    assert len(big.axes[0].texts) == 0

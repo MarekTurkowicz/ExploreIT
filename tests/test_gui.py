@@ -376,6 +376,11 @@ def test_ranking_tab_ranks_and_shows_prestige_on_the_graph(app: ExploreApp, tmp_
     eigen = next(row for row in tab.methods_table.rows() if row[0] == "eigenvector")
     assert float(eigen[4]) > 0  # the largest eigenvalue is shown
 
+    window = tab.show_matrix_window()
+    window.weighted.set(True)
+    window.draw()
+    window.destroy()
+
     tab.save_rankings()
     tab.save_matrices()
     assert sorted(p.name for p in tmp_path.glob("ring-*.csv")) == [

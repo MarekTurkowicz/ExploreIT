@@ -128,6 +128,9 @@ class RankingTab(ttk.Frame):
             actions, textvariable=self.on_graph, state="readonly", width=18
         )
         self.method_choice.pack(side="left")
+        self.matrix_button = ttk.Button(actions, text="Show matrix", command=self.show_matrix)
+        self.matrix_button.pack(side="left", padx=(8, 0))
+        self.matrix_button.state(["disabled"])
         self.result_buttons = [
             ttk.Button(actions, text="Show", command=self.show_on_graph),
             ttk.Button(actions, text="Save rankings (CSV)", command=self.save_rankings),
@@ -180,6 +183,7 @@ class RankingTab(ttk.Frame):
         self.app.graph_tab.set_short_names(names)
         self.checks.configure(text="\n".join(lines))
         self.compute_button.state(["!disabled"] if self.graph.pages else ["disabled"])
+        self.matrix_button.state(["!disabled"] if self.graph.pages else ["disabled"])
 
     def settings(self) -> Settings:
         """Raises ValueError for numbers that cannot be read or are out of range."""
@@ -278,6 +282,13 @@ class RankingTab(ttk.Frame):
             "Ranked with every method. 'Show' sizes the pages on the Graph tab by score." + note
         )
 
+    def show_matrix(self) -> None:
+        self.show_matrix_window()
+
+    def show_matrix_window(self) -> MatrixWindow:
+        """Open the adjacency matrices of the graph as a grid, plain or weighted by 1/Nv."""
+        return MatrixWindow(self, self.graph)
+
     def show_on_graph(self) -> None:
         chosen = [r for r in self.comparison.results if r.method.name == self.on_graph.get()]
         if not chosen:
@@ -313,3 +324,33 @@ class RankingTab(ttk.Frame):
         )
         write_legend_csv(self.graph, Path(f"{stem}-pages.csv"))
         self.app.set_status(f"Saved {stem.name}-A.csv, -A-weighted.csv and -pages.csv")
+
+
+class MatrixWindow(tk.Toplevel):
+    """The adjacency matrix drawn as a grid, with a switch between A and A weighted by 1/Nv."""
+
+    def __init__(self, master: tk.Misc, graph: LinkGraph) -> None:
+        super().__init__(master)
+        self.title("Adjacency matrix")
+        self.geometry("900x900")
+        self.graph = graph
+        self.weighted = tk.BooleanVar(value=False)
+        bar = ttk.Frame(self, padding=8)
+        bar.pack(fill="x")
+        for text, value in (("A: 1 if v links to u", False), ("A: 1/Nv (weighted)", True)):
+            ttk.Radiobutton(
+                bar, text=text, variable=self.weighted, value=value, command=self.draw
+            ).pack(side="left", padx=(0, 16))
+        self.chart = ChartPanel(self, toolbar=True)
+        self.chart.pack(fill="both", expand=True)
+        self.draw()
+
+    def draw(self) -> None:
+        from exploreit.plots import matrix_figure
+        from exploreit.ranking.matrix import adjacency_matrix, short_labels
+
+        weighted = self.weighted.get()
+        matrix = adjacency_matrix(self.graph, weighted=weighted)
+        size = len(self.graph.pages)
+        title = f"{'Weighted 1/Nv' if weighted else 'Adjacency'} matrix, {size} x {size} pages"
+        self.chart.show(matrix_figure(matrix, short_labels(self.graph), title))

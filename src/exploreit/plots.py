@@ -99,7 +99,7 @@ def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
     """
     figure, ax = _figure(width=7, height=3.8)
     drawn = 0
-    for index, (name, history) in enumerate(histories.items()):
+    for name, history in histories.items():
         if len(history) < 2:
             continue
         changes = [
@@ -108,7 +108,7 @@ def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
         ax.plot(
             range(1, len(changes) + 1),
             changes,
-            color=SERIES[index % len(SERIES)],
+            color=SERIES[drawn % len(SERIES)],
             linewidth=2,
             label=name,
         )
@@ -121,6 +121,41 @@ def convergence_figure(histories: dict[str, list[np.ndarray]]) -> Figure:
     ax.set_title("How fast prestige settles", loc="left", fontsize=11, color=INK)
     if drawn > 1:
         ax.legend(frameon=False, fontsize=9)
+    return figure
+
+
+MATRIX_VALUES_UP_TO = 25  # pages; beyond this the numbers in the cells are unreadable
+
+
+def matrix_figure(matrix: np.ndarray, labels: list[str], title: str) -> Figure:
+    """An adjacency matrix as a grid: row v, column u, darker cell = stronger link v -> u."""
+    size = len(labels)
+    side = min(max(4.0, 0.24 * size + 1.8), 12.0)
+    figure, ax = _figure(width=side, height=side)
+    links = matrix[matrix > 0]
+    # A few strong cells (pages with one or two links) would wash out all the others.
+    top = float(np.quantile(links, 0.9)) if links.size else 1.0
+    ax.imshow(matrix, cmap="Blues", vmin=0, vmax=top, interpolation="nearest", aspect="equal")
+    font = 9 if size <= 15 else 7 if size <= 30 else 5
+    ax.set_xticks(range(size), labels, rotation=90, fontsize=font)
+    ax.set_yticks(range(size), labels, fontsize=font)
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position("top")
+    ax.set_xticks(np.arange(size + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(size + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color=GRID, linewidth=0.5)
+    ax.tick_params(which="both", length=0, colors=INK_SECONDARY)
+    for spine in ax.spines.values():
+        spine.set_color(BASELINE)
+    if size <= MATRIX_VALUES_UP_TO:
+        for (row, column), value in np.ndenumerate(matrix):
+            if value:
+                text = "1" if value == 1 else f"{value:.2f}".lstrip("0")
+                colour = SURFACE if value > top * 0.6 else INK
+                ax.text(column, row, text, ha="center", va="center", fontsize=font, color=colour)
+    ax.set_xlabel("to page u", color=INK_SECONDARY, fontsize=9)
+    ax.set_ylabel("from page v", color=INK_SECONDARY, fontsize=9)
+    ax.set_title(title, loc="left", fontsize=11, color=INK, pad=12)
     return figure
 
 
